@@ -32,6 +32,14 @@ fastify.post('/api/boards', async (request) => {
   return result[0];
 });
 
+fastify.delete('/api/boards/:id', async (request) => {
+  const { id } = request.params as any;
+  // Note: For a production app, we'd handle cascading deletes or prevent deletion if cards exist.
+  // For MVP, we'll just delete the board.
+  await db.delete(schema.boards).where(eq(schema.boards.id, id));
+  return { success: true };
+});
+
 // Statuses
 fastify.get('/api/boards/:boardId/statuses', async (request) => {
   const { boardId } = request.params as any;
@@ -60,9 +68,11 @@ fastify.post('/api/boards/:boardId/cards', async (request) => {
   const { boardId } = request.params as any;
   const { statusId, title, description, difficulty, priority } = request.body as any;
   
-  // Logic to enforce max 1 card in 'Doing' status category
   const targetStatus = await db.select().from(schema.statuses).where(eq(schema.statuses.id, statusId));
-  if (targetStatus[0]?.category === 'doing') {
+  if (!targetStatus[0]) throw new Error('Status not found');
+
+  // Logic to enforce max 1 card in 'Doing' status category
+  if (targetStatus[0].category === 'doing') {
     const existingDoing = await db.select()
       .from(schema.cards)
       .innerJoin(schema.statuses, eq(schema.cards.statusId, schema.statuses.id))
@@ -84,11 +94,58 @@ fastify.post('/api/boards/:boardId/cards', async (request) => {
   return result[0];
 });
 
-fastify.patch('/api/cards/:id', async (request) => {
+fastify.patch('/api/cards/:id', async (request, reply) => {
   const { id } = request.params as any;
   const updates = request.body as any;
+
+  // If changing status, run constraints
+  if (updates.statusId) {
+    const card = await db.select().from(schema.cards).where(eq(schema.cards.id, id));
+    if (!card[0]) return reply.status(404).send({ error: 'Card not found' });
+
+    const targetStatus = await db.select().from(schema.statuses).where(eq(schema.statuses.id, updates.statusId));
+    if (!targetStatus[0]) return reply.status(400).send({ error: 'Target status not found' });
+
+    if (targetStatus[0].category === 'doing') {
+      // 1. Max 1 Doing Constraint
+      const existingDoing = await db.select()
+        .from(schema.cards)
+        .innerJoin(schema.statuses, eq(schema.cards.statusId, schema.statuses.id))
+        .where(and(
+          eq(schema.cards.boardId, card[0].boardId), 
+          eq(schema.statuses.category, 'doing'),
+          or(eq(schema.cards.id, id), eq(schema.cards.id, id)) // placeholder for clarity, we expect 0 if we exclude current
+        ));
+      
+      const otherDoing = existingDoing.filter(c => c.cards.id !== id);
+      if (otherDoing.length > 0) {
+        return reply.status(400).send({ error: 'Only one card can be in "Doing" at a time.' });
+      }
+
+      // 2. Dependency Check: Blocking tasks must be 'done' to move into 'doing'
+      const blockingTasks = await db.select({
+        category: schema.statuses.category
+      })
+        .from(schema.dependencies)
+        .innerJoin(schema.cards, eq(schema.dependencies.blockingCardId, schema.cards.id))
+        .innerJoin(schema.statuses, eq(schema.cards.statusId, schema.statuses.id))
+        .where(eq(schema.dependencies.blockedCardId, id));
+
+      const unfinished = blockingTasks.filter(t => t.category !== 'done');
+      if (unfinished.length > 0) {
+        return reply.status(400).send({ error: 'Task is blocked by unfinished dependencies.' });
+      }
+    }
+  }
+
   const result = await db.update(schema.cards).set(updates).where(eq(schema.cards.id, id)).returning();
   return result[0];
+});
+
+fastify.delete('/api/cards/:id', async (request) => {
+  const { id } = request.params as any;
+  await db.delete(schema.cards).where(eq(schema.cards.id, id));
+  return { success: true };
 });
 
 // Card Updates
@@ -111,6 +168,21 @@ fastify.post('/api/cards/:cardId/updates', async (request) => {
 fastify.get('/api/cards/:cardId/dependencies', async (request) => {
   const { cardId } = request.params as any;
   return await db.select().from(schema.dependencies).where(or(eq(schema.dependencies.blockingCardId, cardId), eq(schema.dependencies.blockedCardId, cardId)));
+});
+
+fastify.post('/api/dependencies', async (request) => {
+  const { blockingCardId, blockedCardId } = request.body as any;
+  const result = await db.insert(schema.dependencies).values({
+    blockingCardId,
+    blockedCardId,
+  }).returning();
+  return result[0];
+});
+
+fastify.delete('/api/dependencies/:id', async (request) => {
+  const { id } = request.params as any;
+  await db.delete(schema.dependencies).where(eq(schema.dependencies.id, id));
+  return { success: true };
 });
 
 const start = async () => {
