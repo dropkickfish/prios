@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { apiClient } from '../../api/client';
-import { BoardType } from '../../types';
+import type { BoardType } from '../../types';
 
 export const Dashboard = () => {
   const [boards, setBoards] = useState<BoardType[]>([]);
