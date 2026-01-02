@@ -10,7 +10,7 @@ export const statuses = sqliteTable('statuses', {
     boardId: text('board_id').notNull().references(() => boards.id),
     name: text('name').notNull(),
     order: integer('order').notNull(),
-    category: text('category', { enum: ['maybe', 'icebox', 'doing', 'done', 'archive'] }).notNull(),
+    category: text('category', { enum: ['maybe', 'scheduled', 'doing', 'done', 'wontdo'] }).notNull(),
 });
 export const cards = sqliteTable('cards', {
     id: text('id').primaryKey().$defaultFn(() => uuidv4()),
@@ -44,5 +44,13 @@ export const userStats = sqliteTable('user_stats', {
     difficultySum: integer('difficulty_sum').default(0),
     prioritySum: integer('priority_sum').default(0),
     completedCount: integer('completed_count').default(0),
+    abandonedCount: integer('abandoned_count').default(0),
     isDayOff: integer('is_day_off', { mode: 'boolean' }).default(false),
+});
+export const appSettings = sqliteTable('app_settings', {
+    id: text('id').primaryKey().$defaultFn(() => 'singleton'), // Only one row
+    googleAccessToken: text('google_access_token'),
+    googleRefreshToken: text('google_refresh_token'),
+    googleTokenExpiry: integer('google_token_expiry'),
+    googleCalendarId: text('google_calendar_id').default('primary'),
 });

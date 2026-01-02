@@ -5,8 +5,12 @@ import * as schema from './schema.js';
 import { eq, and, or, desc } from 'drizzle-orm';
 import dotenv from 'dotenv';
 import cors from '@fastify/cors';
+import { DAVClient } from 'tsdav';
 
 dotenv.config();
+
+// Note: We use manual fetch for OAuth code exchange since we removed googleapis
+const GOOGLE_AUTH_ENDPOINT = 'https://oauth2.googleapis.com';
 
 const sqlite = new Database('sqlite.db');
 export const db = drizzle(sqlite, { schema });
@@ -16,11 +20,334 @@ const fastify = Fastify({
 });
 
 await fastify.register(cors, {
-  origin: true, // For development, allow all origins
+  origin: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
 });
 
 fastify.get('/health', async () => {
   return { status: 'ok' };
+});
+
+// Google Auth Routes
+fastify.get('/api/auth/google/url', async () => {
+  const params = new URLSearchParams({
+    client_id: process.env.GOOGLE_CLIENT_ID!,
+    redirect_uri: process.env.GOOGLE_REDIRECT_URI!,
+    response_type: 'code',
+    scope: 'openid email https://www.googleapis.com/auth/calendar https://www.googleapis.com/auth/calendar.events',
+    access_type: 'offline',
+    prompt: 'consent',
+  });
+  const url = `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`;
+  return { url };
+});
+
+fastify.get('/api/auth/google/callback', async (request, reply) => {
+  const { code } = request.query as any;
+  
+  const tokenRes = await fetch(`${GOOGLE_AUTH_ENDPOINT}/token`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      code,
+      client_id: process.env.GOOGLE_CLIENT_ID!,
+      client_secret: process.env.GOOGLE_CLIENT_SECRET!,
+      redirect_uri: process.env.GOOGLE_REDIRECT_URI!,
+      grant_type: 'authorization_code',
+    }),
+  });
+
+  const tokens = await tokenRes.json();
+  
+  if (tokens.error) {
+    throw new Error(tokens.error_description || tokens.error);
+  }
+
+  // Fetch user email
+  const userRes = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+    headers: { Authorization: `Bearer ${tokens.access_token}` }
+  });
+  const user = await userRes.json() as any;
+  const email = user.email;
+
+  await db.insert(schema.appSettings).values({
+    id: 'singleton',
+    googleAccessToken: tokens.access_token,
+    googleRefreshToken: tokens.refresh_token,
+    googleTokenExpiry: Date.now() + (tokens.expires_in * 1000),
+    googleCalendarId: email,
+  }).onConflictDoUpdate({
+    target: schema.appSettings.id,
+    set: {
+      googleAccessToken: tokens.access_token,
+      googleRefreshToken: tokens.refresh_token,
+      googleTokenExpiry: Date.now() + (tokens.expires_in * 1000),
+      googleCalendarId: email,
+    }
+  });
+
+  return reply.type('text/html').send(`
+    <html>
+      <body style="font-family: sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; margin: 0; background: #0f172a; color: white;">
+        <h1 style="color: #38bdf8;">Connected!</h1>
+        <p>You can close this window now.</p>
+        <script>
+          if (window.opener) {
+            window.opener.postMessage('google-auth-success', '*');
+          }
+          setTimeout(() => window.close(), 2000);
+        </script>
+      </body>
+    </html>
+  `);
+});
+
+fastify.get('/api/auth/google/status', async () => {
+  const settings = await db.select().from(schema.appSettings).where(eq(schema.appSettings.id, 'singleton'));
+  return { connected: !!settings[0]?.googleRefreshToken };
+});
+
+fastify.delete('/api/auth/google', async () => {
+  await db.update(schema.appSettings).set({
+    googleAccessToken: null,
+    googleRefreshToken: null,
+    googleTokenExpiry: null,
+  }).where(eq(schema.appSettings.id, 'singleton'));
+  return { success: true };
+});
+
+// CalDAV Helper
+async function getCalendarEvents(startTime: Date, endTime: Date) {
+  const settings = await db.select().from(schema.appSettings).where(eq(schema.appSettings.id, 'singleton'));
+  if (!settings[0] || !settings[0].googleRefreshToken) {
+    fastify.log.warn('No Google settings found in DB');
+    return [];
+  }
+
+  let email = settings[0].googleCalendarId;
+  let accessToken = settings[0].googleAccessToken!;
+
+  // If we don't have the email/ID, fetch it from REST API
+  if (!email) {
+    try {
+      const restRes = await fetch('https://www.googleapis.com/calendar/v3/users/me/calendarList', {
+        headers: { Authorization: `Bearer ${accessToken}` }
+      });
+      if (restRes.ok) {
+        const list = await restRes.json() as any;
+        email = list.items?.find((i: any) => i.primary)?.id;
+        if (email) {
+          await db.update(schema.appSettings).set({ googleCalendarId: email }).where(eq(schema.appSettings.id, 'singleton'));
+          fastify.log.info({ email }, 'Discovered and saved primary calendar ID');
+        }
+      }
+    } catch (e) {
+      fastify.log.error(e, 'Failed to discover primary email');
+    }
+  }
+
+  const serverUrl = email && email !== 'primary'
+    ? `https://apidata.googleusercontent.com/caldav/v2/${email}/user/`
+    : 'https://apidata.googleusercontent.com/caldav/v2/';
+
+  try {
+    const client = new DAVClient({
+      serverUrl,
+      credentials: { accessToken },
+      authMethod: 'Custom',
+      authFunction: async () => ({
+        authorization: `Bearer ${accessToken}`
+      }),
+      defaultAccountType: 'caldav',
+    });
+
+    await client.login();
+    const calendars = await client.fetchCalendars();
+    const primary = calendars.find(c => c.url.includes('primary') || (email && c.url.includes(email))) || calendars[0];
+
+    const events = await client.fetchCalendarObjects({
+      calendar: primary,
+      timeRange: {
+        start: startTime.toISOString(),
+        end: endTime.toISOString(),
+      },
+    });
+
+    return events.map(e => {
+      const summary = e.data?.match(/SUMMARY:(.*)/)?.[1]?.trim() || 'Untitled';
+      const startStr = e.data?.match(/DTSTART[:;](?:.*:)?(.*)/)?.[1]?.trim();
+      const endStr = e.data?.match(/DTEND[:;](?:.*:)?(.*)/)?.[1]?.trim();
+
+      return {
+        summary,
+        start: { dateTime: startStr ? new Date(startStr.replace(/(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})Z?/, '$1-$2-$3T$4:$5:$6Z')) : startTime },
+        end: { dateTime: endStr ? new Date(endStr.replace(/(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})Z?/, '$1-$2-$3T$4:$5:$6Z')) : endTime },
+      };
+    });
+  } catch (error: any) {
+    fastify.log.error({ 
+      msg: error.message, 
+      url: serverUrl,
+      email
+    }, 'getCalendarEvents failed');
+    throw error;
+  }
+}
+
+async function createCalendarEvent(title: string, startTime: Date, durationMinutes: number) {
+  const settings = await db.select().from(schema.appSettings).where(eq(schema.appSettings.id, 'singleton'));
+  if (!settings[0]?.googleRefreshToken) return;
+
+  const email = (settings[0].googleCalendarId && settings[0].googleCalendarId !== 'primary') 
+    ? settings[0].googleCalendarId 
+    : 'primary';
+  const accessToken = settings[0].googleAccessToken!;
+  const endTime = new Date(startTime.getTime() + durationMinutes * 60000);
+
+  const serverUrl = email !== 'primary'
+    ? `https://apidata.googleusercontent.com/caldav/v2/${email}/user/`
+    : 'https://apidata.googleusercontent.com/caldav/v2/';
+
+
+  try {
+    const client = new DAVClient({
+      serverUrl,
+      credentials: { accessToken },
+      authMethod: 'Custom',
+      authFunction: async () => ({
+        authorization: `Bearer ${accessToken}`
+      }),
+      defaultAccountType: 'caldav',
+    });
+
+    await client.login();
+    const calendars = await client.fetchCalendars();
+    const primary = calendars.find(c => c.url.includes('primary') || c.url.includes(email)) || calendars[0];
+
+    const uid = Math.random().toString(36).substring(2) + Date.now().toString(36);
+    const icalData = [
+      'BEGIN:VCALENDAR',
+      'VERSION:2.0',
+      'PRODID:-//Prios//EN',
+      'BEGIN:VEVENT',
+      `UID:${uid}`,
+      `DTSTAMP:${new Date().toISOString().replace(/[-:]/g, '').split('.')[0]}Z`,
+      `DTSTART:${startTime.toISOString().replace(/[-:]/g, '').split('.')[0]}Z`,
+      `DTEND:${endTime.toISOString().replace(/[-:]/g, '').split('.')[0]}Z`,
+      `SUMMARY:${title}`,
+      'END:VEVENT',
+      'END:VCALENDAR',
+    ].join('\r\n');
+
+    await client.createCalendarObject({
+      calendar: primary,
+      filename: `${uid}.ics`,
+      iCalString: icalData,
+    });
+  } catch (error: any) {
+    fastify.log.error({ msg: error.message, url: serverUrl }, 'createCalendarEvent failed');
+    throw error;
+  }
+}
+
+fastify.get('/api/calendar/availability', async (request) => {
+  const todayStart = new Date();
+  todayStart.setHours(0,0,0,0);
+  const todayEnd = new Date();
+  todayEnd.setHours(23,59,59,999);
+
+  const events = await getCalendarEvents(todayStart, todayEnd);
+  
+  // Basic busy slots extraction
+  const busySlots = events.map((event: any) => ({
+    start: event.start.dateTime || event.start.date,
+    end: event.end.dateTime || event.end.date,
+    title: event.summary,
+  }));
+
+  return { busySlots };
+});
+
+// Scheduling Engine
+fastify.post('/api/scheduler/auto', async (request) => {
+  const { boardId } = request.body as any;
+  
+  // 1. Get cards that need scheduling (e.g., in 'maybe' category)
+  const cardsToSchedule = await db.select()
+    .from(schema.cards)
+    .innerJoin(schema.statuses, eq(schema.cards.statusId, schema.statuses.id))
+    .where(and(eq(schema.cards.boardId, boardId), eq(schema.statuses.category, 'maybe')));
+
+  // Get dependencies for these cards
+  const allCardIds = cardsToSchedule.map(c => c.cards.id);
+  const cardDeps = await db.select().from(schema.dependencies).where(or(
+    ...allCardIds.map(id => eq(schema.dependencies.blockedCardId, id))
+  ));
+
+  // 2. Get busy slots from Google Calendar
+  const todayStart = new Date();
+  todayStart.setHours(0,0,0,0);
+  const todayEnd = new Date();
+  todayEnd.setHours(23,59,59,999);
+  const events = await getCalendarEvents(todayStart, todayEnd);
+  
+  const busySlots = events.map((event: any) => ({
+    start: new Date(event.start.dateTime || event.start.date).getTime(),
+    end: new Date(event.end.dateTime || event.end.date).getTime(),
+  }));
+
+  // 3. Scheduling Logic: Topological Sort + Priority
+  let currentTime = Date.now();
+  const results = [];
+  const scheduledIds = new Set();
+  
+  // Create a dependency map
+  const depsMap = new Map();
+  cardDeps.forEach(d => {
+    if (!depsMap.has(d.blockedCardId)) depsMap.set(d.blockedCardId, []);
+    depsMap.get(d.blockedCardId).push(d.blockingCardId);
+  });
+
+  // Sort by priority initially
+  let remaining = cardsToSchedule.sort((a, b) => b.cards.priority - a.cards.priority);
+
+  while (remaining.length > 0) {
+    // Find tasks whose dependencies are already scheduled OR not in this set
+    const readyIdx = remaining.findIndex(item => {
+      const blockers = depsMap.get(item.cards.id) || [];
+      return blockers.every((bid: string) => scheduledIds.has(bid) || !allCardIds.includes(bid));
+    });
+
+    if (readyIdx === -1) break; // Circular dependency or stuck
+
+    const item = remaining.splice(readyIdx, 1)[0];
+    const card = item.cards;
+    const durationMs = card.difficulty * 30 * 60 * 1000;
+    
+    let foundSlot = false;
+    while (!foundSlot) {
+      const slotEnd = currentTime + durationMs;
+      const conflict = busySlots.find(s => (currentTime < s.end && slotEnd > s.start));
+      
+      if (conflict) {
+        currentTime = conflict.end + (5 * 60 * 1000); // 5 min buffer
+      } else {
+        foundSlot = true;
+      }
+    }
+
+    await db.update(schema.cards).set({ scheduledAt: new Date(currentTime) }).where(eq(schema.cards.id, card.id));
+    
+    // Create event in Google Calendar (CalDAV)
+    await createCalendarEvent(`[Prios] ${card.title}`, new Date(currentTime), card.difficulty * 30);
+
+    results.push({ id: card.id, title: card.title, scheduledAt: new Date(currentTime) });
+    scheduledIds.add(card.id);
+    
+    currentTime += durationMs + (10 * 60 * 1000);
+  }
+
+  return { success: true, scheduledTasks: results };
 });
 
 // Helper for stats
@@ -56,8 +383,10 @@ fastify.post('/api/boards', async (request) => {
   // Create default statuses
   await db.insert(schema.statuses).values([
     { boardId: board.id, name: 'Maybe', order: 1, category: 'maybe' },
-    { boardId: board.id, name: 'Doing', order: 2, category: 'doing' },
-    { boardId: board.id, name: 'Done', order: 3, category: 'done' },
+    { boardId: board.id, name: 'Scheduled', order: 2, category: 'scheduled' },
+    { boardId: board.id, name: 'Doing', order: 3, category: 'doing' },
+    { boardId: board.id, name: 'Done', order: 4, category: 'done' },
+    { boardId: board.id, name: "Won't Do", order: 5, category: 'wontdo' },
   ]);
   
   return board;
@@ -80,8 +409,10 @@ fastify.get('/api/boards/:boardId/statuses', async (request) => {
   if (boardStatuses.length === 0) {
     await db.insert(schema.statuses).values([
       { boardId, name: 'Maybe', order: 1, category: 'maybe' },
-      { boardId, name: 'Doing', order: 2, category: 'doing' },
-      { boardId, name: 'Done', order: 3, category: 'done' },
+      { boardId, name: 'Scheduled', order: 2, category: 'scheduled' },
+      { boardId, name: 'Doing', order: 3, category: 'doing' },
+      { boardId, name: 'Done', order: 4, category: 'done' },
+      { boardId, name: "Won't Do", order: 5, category: 'wontdo' },
     ]);
     boardStatuses = await db.select().from(schema.statuses).where(eq(schema.statuses.boardId, boardId)).orderBy(schema.statuses.order);
   }
@@ -105,6 +436,13 @@ fastify.post('/api/boards/:boardId/statuses', async (request) => {
 fastify.get('/api/boards/:boardId/cards', async (request) => {
   const { boardId } = request.params as any;
   return await db.select().from(schema.cards).where(eq(schema.cards.boardId, boardId));
+});
+
+fastify.get('/api/cards/:id', async (request, reply) => {
+  const { id } = request.params as any;
+  const card = await db.select().from(schema.cards).where(eq(schema.cards.id, id));
+  if (!card[0]) return reply.status(404).send({ error: 'Card not found' });
+  return card[0];
 });
 
 fastify.post('/api/boards/:boardId/cards', async (request) => {
@@ -194,6 +532,126 @@ fastify.patch('/api/cards/:id', async (request, reply) => {
 
   const result = await db.update(schema.cards).set(updates).where(eq(schema.cards.id, id)).returning();
   return result[0];
+});
+
+fastify.get('/api/cards/:id/schedule-suggestions', async (request, reply) => {
+  const { id } = request.params as any;
+  const cardResult = await db.select().from(schema.cards).where(eq(schema.cards.id, id));
+  if (!cardResult[0]) return reply.status(404).send({ error: 'Card not found' });
+  const card = cardResult[0];
+
+  const todayStart = new Date();
+  todayStart.setHours(0,0,0,0);
+  const tomorrowEnd = new Date();
+  tomorrowEnd.setDate(tomorrowEnd.getDate() + 1);
+  tomorrowEnd.setHours(23,59,59,999);
+  
+  const events = await getCalendarEvents(todayStart, tomorrowEnd);
+  const busySlots = events.map((event: any) => ({
+    start: new Date(event.start.dateTime || event.start.date).getTime(),
+    end: new Date(event.end.dateTime || event.end.date).getTime(),
+  }));
+
+  const suggestions = [];
+  let currentTime = Date.now();
+  // Round to next 15 mins
+  currentTime = Math.ceil(currentTime / (15 * 60 * 1000)) * (15 * 60 * 1000);
+  
+  const durationMs = card.difficulty * 30 * 60 * 1000;
+  
+  while (suggestions.length < 5 && currentTime < tomorrowEnd.getTime()) {
+    const slotEnd = currentTime + durationMs;
+    const conflict = busySlots.find(s => (currentTime < s.end && slotEnd > s.start));
+    
+    if (conflict) {
+      currentTime = conflict.end + (5 * 60 * 1000);
+      currentTime = Math.ceil(currentTime / (15 * 60 * 1000)) * (15 * 60 * 1000);
+    } else {
+      suggestions.push({
+        startTime: new Date(currentTime).toISOString(),
+        endTime: new Date(slotEnd).toISOString(),
+        label: new Date(currentTime).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) + 
+                (new Date(currentTime).getDate() !== new Date().getDate() ? ' (Tomorrow)' : '')
+      });
+      currentTime += durationMs + (60 * 60 * 1000); // 1 hour gap between suggestions
+      currentTime = Math.ceil(currentTime / (15 * 60 * 1000)) * (15 * 60 * 1000);
+    }
+  }
+
+  return { suggestions, currentDifficulty: card.difficulty };
+});
+
+fastify.post('/api/cards/:id/schedule', async (request, reply) => {
+  const { id } = request.params as any;
+  const { scheduledAt, durationMinutes } = request.body as any;
+  
+  const cardResult = await db.select().from(schema.cards).where(eq(schema.cards.id, id));
+  if (!cardResult[0]) return reply.status(404).send({ error: 'Card not found' });
+  const card = cardResult[0];
+
+  let finalScheduledAt: Date;
+  let finalDuration: number;
+
+  if (scheduledAt) {
+    finalScheduledAt = new Date(scheduledAt);
+    finalDuration = durationMinutes || (card.difficulty * 30);
+  } else {
+    // 1. Get busy slots
+    const todayStart = new Date();
+    todayStart.setHours(0,0,0,0);
+    const todayEnd = new Date();
+    todayEnd.setHours(23,59,59,999);
+    
+    const events = await getCalendarEvents(todayStart, todayEnd);
+    const busySlots = events.map((event: any) => ({
+      start: new Date(event.start.dateTime || event.start.date).getTime(),
+      end: new Date(event.end.dateTime || event.end.date).getTime(),
+    }));
+
+    // 2. Find first free slot
+    let currentTime = Date.now();
+    const durationMs = card.difficulty * 30 * 60 * 1000;
+    let foundSlot = false;
+    while (!foundSlot) {
+      const slotEnd = currentTime + durationMs;
+      const conflict = busySlots.find(s => (currentTime < s.end && slotEnd > s.start));
+      if (conflict) {
+        currentTime = conflict.end + (5 * 60 * 1000);
+      } else {
+        foundSlot = true;
+      }
+    }
+    finalScheduledAt = new Date(currentTime);
+    finalDuration = card.difficulty * 30;
+  }
+
+  // 3. Find/Create 'scheduled' status for this board
+  let scheduledStatus = (await db.select()
+    .from(schema.statuses)
+    .where(and(eq(schema.statuses.boardId, card.boardId), eq(schema.statuses.category, 'scheduled'))))[0];
+  
+  if (!scheduledStatus) {
+    // Auto-create lane if missing
+    const results = await db.insert(schema.statuses).values({
+      boardId: card.boardId,
+      name: 'Scheduled',
+      order: 2, // Approximate
+      category: 'scheduled'
+    }).returning();
+    scheduledStatus = results[0];
+    fastify.log.info({ boardId: card.boardId }, 'Auto-created missing Scheduled status lane');
+  }
+
+  // 4. Update card
+  await db.update(schema.cards).set({
+    scheduledAt: finalScheduledAt,
+    statusId: scheduledStatus.id
+  }).where(eq(schema.cards.id, id));
+
+  // 5. Create Calendar Event
+  await createCalendarEvent(`[Prios] ${card.title}`, finalScheduledAt, finalDuration);
+
+  return { success: true, scheduledAt: finalScheduledAt };
 });
 
 fastify.delete('/api/cards/:id', async (request) => {
@@ -300,5 +758,15 @@ const start = async () => {
     process.exit(1);
   }
 };
+
+// Better shutdown handling for EADDRINUSE during tsx restart
+const closeGracefully = async (signal: string) => {
+  fastify.log.info(`Received ${signal}. Closing fastify...`);
+  await fastify.close();
+  process.exit(0);
+};
+
+process.on('SIGINT', () => closeGracefully('SIGINT'));
+process.on('SIGTERM', () => closeGracefully('SIGTERM'));
 
 start();

@@ -24,7 +24,7 @@ export const Layout = ({ children, currentView, onNavigate }: LayoutProps) => {
           <ul className="menu menu-horizontal px-1 font-bold uppercase text-xs tracking-widest opacity-70">
             <li><a onClick={() => onNavigate?.('dashboard')} className={currentView === 'dashboard' ? 'text-primary' : ''}>Dashboard</a></li>
             <li><a onClick={() => onNavigate?.('stats')} className={currentView === 'stats' ? 'text-primary' : ''}>Stats</a></li>
-            <li><a>Settings</a></li>
+            <li><a onClick={() => onNavigate?.('settings')} className={currentView === 'settings' ? 'text-primary' : ''}>Settings</a></li>
           </ul>
         </div>
       </div>

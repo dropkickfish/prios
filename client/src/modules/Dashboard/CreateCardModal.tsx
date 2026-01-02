@@ -5,17 +5,19 @@ import { apiClient } from '../../api/client';
 interface CreateCardModalProps {
   boardId: string;
   statuses: StatusType[];
+  existingCards: CardType[];
   initialStatusId?: string | null;
   onClose: () => void;
   onCreated: (card: CardType) => void;
 }
 
-export const CreateCardModal = ({ boardId, statuses, initialStatusId, onClose, onCreated }: CreateCardModalProps) => {
+export const CreateCardModal = ({ boardId, statuses, existingCards, initialStatusId, onClose, onCreated }: CreateCardModalProps) => {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [statusId, setStatusId] = useState(initialStatusId || statuses[0]?.id || '');
   const [difficulty, setDifficulty] = useState(3);
   const [priority, setPriority] = useState(3);
+  const [selectedDependencies, setSelectedDependencies] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -32,6 +34,14 @@ export const CreateCardModal = ({ boardId, statuses, initialStatusId, onClose, o
         difficulty,
         priority,
       });
+
+      // Create dependencies
+      if (selectedDependencies.length > 0) {
+        await Promise.all(selectedDependencies.map(depId => 
+          apiClient.addDependency(depId, newCard.id)
+        ));
+      }
+
       onCreated(newCard);
       onClose();
     } catch (err: any) {
@@ -98,6 +108,29 @@ export const CreateCardModal = ({ boardId, statuses, initialStatusId, onClose, o
 
             <div className="form-control">
                {/* Spacer for layout */}
+            </div>
+          </div>
+
+          <div className="form-control">
+            <label className="label">
+              <span className="label-text font-black uppercase tracking-widest opacity-40 text-[10px]">Depends On (Blocking Tasks)</span>
+            </label>
+            <div className="flex flex-wrap gap-2 max-h-32 overflow-y-auto p-2 bg-base-200/50 rounded-2xl border border-base-content/5">
+              {existingCards.length === 0 && <p className="text-[10px] opacity-30 p-2 italic">No other tasks to depend on yet.</p>}
+              {existingCards.map(card => (
+                <label key={card.id} className="label cursor-pointer flex gap-3 p-2 bg-base-100 rounded-xl border border-base-content/5 hover:border-primary/30 transition-colors">
+                  <input 
+                    type="checkbox" 
+                    className="checkbox checkbox-xs checkbox-primary rounded-md" 
+                    checked={selectedDependencies.includes(card.id)}
+                    onChange={(e) => {
+                      if (e.target.checked) setSelectedDependencies([...selectedDependencies, card.id]);
+                      else setSelectedDependencies(selectedDependencies.filter(id => id !== card.id));
+                    }}
+                  />
+                  <span className="text-[10px] font-bold truncate max-w-[120px]">{card.title}</span>
+                </label>
+              ))}
             </div>
           </div>
 

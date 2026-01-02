@@ -9,7 +9,7 @@ export interface StatusType {
   boardId: string;
   name: string;
   order: number;
-  category: 'maybe' | 'icebox' | 'doing' | 'done' | 'archive';
+  category: 'maybe' | 'scheduled' | 'doing' | 'done' | 'wontdo';
 }
 
 export interface CardType {

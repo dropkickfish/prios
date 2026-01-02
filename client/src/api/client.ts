@@ -23,6 +23,10 @@ export const apiClient = {
     const res = await fetch(`${API_BASE}/boards/${boardId}/cards`);
     return res.json();
   },
+  getCard: async (cardId: string) => {
+    const res = await fetch(`${API_BASE}/cards/${cardId}`);
+    return res.json();
+  },
   getActiveCard: async (boardId: string) => {
     const res = await fetch(`${API_BASE}/boards/${boardId}/cards`);
     const cards = await res.json();
@@ -56,6 +60,50 @@ export const apiClient = {
       const error = await res.json();
       throw new Error(error.error || 'Failed to create card');
     }
+    return res.json();
+  },
+  getGoogleAuthUrl: async () => {
+    const res = await fetch(`${API_BASE}/auth/google/url`);
+    return res.json();
+  },
+  getGoogleAuthStatus: async () => {
+    const res = await fetch(`${API_BASE}/auth/google/status`);
+    return res.json();
+  },
+  disconnectGoogle: async () => {
+    const res = await fetch(`${API_BASE}/auth/google`, { method: 'DELETE' });
+    return res.json();
+  },
+  getCalendarAvailability: async () => {
+    const res = await fetch(`${API_BASE}/calendar/availability`);
+    return res.json();
+  },
+  autoSchedule: async (boardId: string) => {
+    const res = await fetch(`${API_BASE}/scheduler/auto`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ boardId }),
+    });
+    return res.json();
+  },
+  scheduleCard: async (cardId: string, data?: { scheduledAt?: string; durationMinutes?: number }): Promise<{ success: boolean; scheduledAt: string }> => {
+    const res = await fetch(`${API_BASE}/cards/${cardId}/schedule`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data || {}),
+    });
+    return res.json();
+  },
+  getScheduleSuggestions: async (cardId: string): Promise<{ suggestions: Array<{ startTime: string; endTime: string; label: string }>; currentDifficulty: number }> => {
+    const res = await fetch(`${API_BASE}/cards/${cardId}/schedule-suggestions`);
+    return res.json();
+  },
+  addDependency: async (blockingCardId: string, blockedCardId: string) => {
+    const res = await fetch(`${API_BASE}/dependencies`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ blockingCardId, blockedCardId }),
+    });
     return res.json();
   }
 };
