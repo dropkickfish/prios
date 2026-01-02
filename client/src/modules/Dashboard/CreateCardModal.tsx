@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import type { StatusType, CardType } from '../../types';
 import { apiClient } from '../../api/client';
+import { EisenhowerMatrixHelper } from './EisenhowerMatrixHelper';
 
 interface CreateCardModalProps {
   boardId: string;
@@ -20,6 +21,7 @@ export const CreateCardModal = ({ boardId, statuses, existingCards, initialStatu
   const [selectedDependencies, setSelectedDependencies] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showEisenhower, setShowEisenhower] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -134,31 +136,44 @@ export const CreateCardModal = ({ boardId, statuses, existingCards, initialStatu
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-8">
-            <div className="form-control">
-              <label className="label">
-                <span className="label-text font-black uppercase tracking-widest opacity-40 text-[10px]">Difficulty (1-5)</span>
-                <span className="badge badge-outline font-black">{difficulty}</span>
-              </label>
-              <input 
-                type="range" min="1" max="5" 
-                className="range range-xs range-primary" 
-                value={difficulty}
-                onChange={(e) => setDifficulty(parseInt(e.target.value))}
-              />
-            </div>
+          <div className="bg-primary/5 p-6 rounded-3xl border border-primary/10 relative group/eval">
+            <div className="absolute -top-3 left-4 px-2 bg-base-100 text-[10px] font-black uppercase tracking-widest text-primary">Priority & Sizing</div>
+            
+            <button 
+              type="button"
+              onClick={() => setShowEisenhower(true)}
+              className="absolute top-4 right-4 btn btn-circle btn-xs btn-ghost hover:bg-primary/20 hover:text-primary transition-all"
+              title="Use Eisenhower Helper"
+            >
+              ✨
+            </button>
 
-            <div className="form-control">
-              <label className="label">
-                <span className="label-text font-black uppercase tracking-widest opacity-40 text-[10px]">Priority (1-5)</span>
-                <span className="badge badge-outline font-black">{priority}</span>
-              </label>
-              <input 
-                type="range" min="1" max="5" 
-                className="range range-xs range-secondary" 
-                value={priority}
-                onChange={(e) => setPriority(parseInt(e.target.value))}
-              />
+            <div className="grid grid-cols-2 gap-8">
+              <div className="form-control">
+                <label className="label">
+                  <span className="label-text font-black uppercase tracking-widest opacity-40 text-[10px]">Difficulty (1-5)</span>
+                  <span className="badge badge-outline font-black">{difficulty}</span>
+                </label>
+                <input 
+                  type="range" min="1" max="5" 
+                  className="range range-xs range-primary" 
+                  value={difficulty}
+                  onChange={(e) => setDifficulty(parseInt(e.target.value))}
+                />
+              </div>
+
+              <div className="form-control">
+                <label className="label">
+                  <span className="label-text font-black uppercase tracking-widest opacity-40 text-[10px]">Priority (1-4)</span>
+                  <span className="badge badge-outline font-black">{priority}</span>
+                </label>
+                <input 
+                  type="range" min="1" max="4" 
+                  className="range range-xs range-secondary" 
+                  value={priority}
+                  onChange={(e) => setPriority(parseInt(e.target.value))}
+                />
+              </div>
             </div>
           </div>
 
@@ -173,6 +188,16 @@ export const CreateCardModal = ({ boardId, statuses, existingCards, initialStatu
             </button>
           </div>
         </form>
+      {showEisenhower && (
+        <EisenhowerMatrixHelper 
+          onComplete={(res) => {
+            setPriority(res.priority);
+            setDifficulty(res.difficulty);
+            setShowEisenhower(false);
+          }}
+          onCancel={() => setShowEisenhower(false)}
+        />
+      )}
       </div>
     </div>
   );

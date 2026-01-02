@@ -4,6 +4,7 @@ import { apiClient } from '../../api/client';
 import { CardComponent } from '../../components/CardComponent';
 import { CreateCardModal } from './CreateCardModal';
 import { SchedulePickerModal } from './SchedulePickerModal';
+import { CardDetailModal } from './CardDetailModal';
 
 interface BoardViewProps {
   boardId: string;
@@ -14,6 +15,7 @@ export const BoardView = ({ boardId, onBack }: BoardViewProps) => {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [selectedStatusId, setSelectedStatusId] = useState<string | null>(null);
   const [schedulingCard, setSchedulingCard] = useState<CardType | null>(null);
+  const [viewerCard, setViewerCard] = useState<CardType | null>(null);
   const [board, setBoard] = useState<BoardType | null>(null);
   const [statuses, setStatuses] = useState<StatusType[]>([]);
   const [cards, setCards] = useState<CardType[]>([]);
@@ -37,13 +39,9 @@ export const BoardView = ({ boardId, onBack }: BoardViewProps) => {
     fetchData();
   }, [boardId]);
 
-  const handleCardClick = (cardId: string) => {
-    console.log('Card clicked:', cardId);
-  };
-
   const handleStatusChange = async (cardId: string, newStatusId: string) => {
     try {
-      await apiClient.updateCardStatus(cardId, newStatusId);
+      await apiClient.updateCard(cardId, { statusId: newStatusId });
       // Refresh cards
       const boardCards = await apiClient.getCards(boardId);
       setCards(boardCards);
@@ -133,7 +131,8 @@ export const BoardView = ({ boardId, onBack }: BoardViewProps) => {
                 <div key={card.id} className="group relative">
                   <CardComponent 
                     card={card} 
-                    onClick={handleCardClick}
+                    onClick={() => setViewerCard(card)} 
+                    onStatusChange={(newStatusId) => handleStatusChange(card.id, newStatusId)}
                   />
                   <div className="mt-3 flex flex-wrap gap-1 opacity-0 group-hover:opacity-100 transition-all duration-300 justify-center absolute -bottom-2 left-2 right-2 translate-y-full z-20 bg-base-100/90 backdrop-blur-md p-3 rounded-2xl shadow-2xl border border-base-content/10 scale-95 group-hover:scale-100">
                     {status.category === 'maybe' && (
@@ -178,6 +177,15 @@ export const BoardView = ({ boardId, onBack }: BoardViewProps) => {
           card={schedulingCard}
           onClose={() => setSchedulingCard(null)}
           onScheduled={onCardScheduled}
+        />
+      )}
+      {viewerCard && (
+        <CardDetailModal 
+          card={viewerCard}
+          statuses={statuses}
+          onClose={() => setViewerCard(null)}
+          onUpdated={fetchData}
+          onDeleted={fetchData}
         />
       )}
     </div>

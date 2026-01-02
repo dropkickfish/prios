@@ -34,11 +34,17 @@ export const apiClient = {
     // For now, we'll filter client-side for simplicity as per MVP
     return cards.find((c: any) => c.statusCategory === 'doing') || null;
   },
-  updateCardStatus: async (cardId: string, statusId: string) => {
+  updateCard: async (cardId: string, updates: Partial<CardType>) => {
     const res = await fetch(`${API_BASE}/cards/${cardId}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ statusId }),
+      body: JSON.stringify(updates),
+    });
+    return res.json();
+  },
+  deleteCard: async (cardId: string) => {
+    const res = await fetch(`${API_BASE}/cards/${cardId}`, {
+      method: 'DELETE',
     });
     return res.json();
   },
