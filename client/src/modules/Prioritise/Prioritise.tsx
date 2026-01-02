@@ -46,7 +46,7 @@ export const Prioritise = ({ boardId, onBack, onViewExecute }: PrioritiseProps) 
       const doingStatus = statuses.find(s => s.category === 'doing');
       if (doingStatus) {
         try {
-          await apiClient.updateCardStatus(activeCard.id, doingStatus.id);
+          await apiClient.updateCard(activeCard.id, { statusId: doingStatus.id });
           onViewExecute();
           return;
         } catch (err: any) {

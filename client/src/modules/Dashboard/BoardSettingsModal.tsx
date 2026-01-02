@@ -29,6 +29,7 @@ export const BoardSettingsModal: React.FC<BoardSettingsModalProps> = ({ board, o
 
   // Schedule State
   const [schedule, setSchedule] = useState<any>(board.availabilitySchedule || {});
+  const [schedulingWindowDays, setSchedulingWindowDays] = useState(board.schedulingWindowDays || 3);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -45,7 +46,7 @@ export const BoardSettingsModal: React.FC<BoardSettingsModalProps> = ({ board, o
       const res = await fetch(`http://localhost:3000/api/boards/${board.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, colour, availabilitySchedule: schedule }),
+        body: JSON.stringify({ name, colour, availabilitySchedule: schedule, schedulingWindowDays }),
       });
       if (res.ok) {
         const updated = await res.json();
@@ -159,6 +160,21 @@ export const BoardSettingsModal: React.FC<BoardSettingsModalProps> = ({ board, o
                    <span className="text-xs font-medium text-base-content/80">
                      Define when tasks on this board can be scheduled. Tasks will only be auto-scheduled within these windows.
                    </span>
+                </div>
+
+                <div className="form-control mb-6">
+                    <label className="label">
+                        <span className="label-text font-black uppercase tracking-widest text-base-content/60 text-[10px]">Scheduling Window (Days)</span>
+                    </label>
+                    <input 
+                        type="number" 
+                        min="1"
+                        max="14"
+                        className="input input-bordered focus:input-primary rounded-2xl h-14 text-lg font-bold bg-base-200/50 text-base-content"
+                        value={schedulingWindowDays}
+                        onChange={(e) => setSchedulingWindowDays(parseInt(e.target.value) || 3)}
+                    />
+                     <span className="label-text-alt text-[10px] opacity-50 mt-2 ml-2">How many days in the future to allow scheduling (Max 14)</span>
                 </div>
 
                 <div className="space-y-2">

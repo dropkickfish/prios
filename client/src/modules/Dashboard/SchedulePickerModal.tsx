@@ -6,6 +6,7 @@ interface SchedulePickerModalProps {
   card: CardType;
   onClose: () => void;
   onScheduled: (scheduledAt: string) => void;
+  schedulingWindowDays?: number;
 }
 
 interface Suggestion {
@@ -14,9 +15,16 @@ interface Suggestion {
   label: string;
 }
 
-export const SchedulePickerModal: React.FC<SchedulePickerModalProps> = ({ card, onClose, onScheduled }) => {
+export const SchedulePickerModal: React.FC<SchedulePickerModalProps> = ({ card, onClose, onScheduled, schedulingWindowDays = 3 }) => {
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
   const [loading, setLoading] = useState(false);
+  
+  const [selectedDate, setSelectedDate] = useState(new Date());
+  
+  // Reset date to today on open
+  useEffect(() => {
+     setSelectedDate(new Date());
+  }, [card.id]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -30,8 +38,11 @@ export const SchedulePickerModal: React.FC<SchedulePickerModalProps> = ({ card, 
 
   useEffect(() => {
     const fetchSuggestions = async () => {
+      setLoading(true);
       try {
-        const data = await apiClient.getScheduleSuggestions(card.id);
+        // specific date format YYYY-MM-DD
+        const dateStr = selectedDate.toISOString().split('T')[0];
+        const data = await apiClient.getScheduleSuggestions(card.id, dateStr);
         setSuggestions(data.suggestions);
       } catch (error) {
         console.error('Failed to fetch suggestions:', error);
@@ -40,7 +51,7 @@ export const SchedulePickerModal: React.FC<SchedulePickerModalProps> = ({ card, 
       }
     };
     fetchSuggestions();
-  }, [card.id]);
+  }, [card.id, selectedDate]);
 
   const handleSchedule = async (startTime: string) => {
     setScheduling(true);
@@ -74,6 +85,51 @@ export const SchedulePickerModal: React.FC<SchedulePickerModalProps> = ({ card, 
             onChange={(e) => setDuration(parseInt(e.target.value) || 30)}
           />
           <div className="text-[10px] uppercase font-black tracking-widest opacity-30 mt-1">Based on difficulty: {card.difficulty}</div>
+        </div>
+
+        {/* Date Navigation */}
+        <div className="flex items-center justify-between bg-base-200/50 p-2 rounded-2xl mb-6">
+            <button 
+                className="btn btn-sm btn-ghost btn-square rounded-xl"
+                disabled={selectedDate.toDateString() === new Date().toDateString()}
+                onClick={() => {
+                    const prev = new Date(selectedDate);
+                    prev.setDate(prev.getDate() - 1);
+                    setSelectedDate(prev);
+                }}
+            >
+                &lt;
+            </button>
+            <div className="text-center">
+                <div className="font-black text-sm uppercase tracking-wider">
+                    {selectedDate.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })}
+                </div>
+                <div className="text-[10px] opacity-40 font-bold uppercase tracking-widest">
+                    {selectedDate.toDateString() === new Date().toDateString() ? 'Today' : 'Future'}
+                </div>
+            </div>
+            <button 
+                className="btn btn-sm btn-ghost btn-square rounded-xl"
+                disabled={(() => {
+                    const today = new Date();
+                    const maxDate = new Date();
+                    maxDate.setDate(today.getDate() + (card.boardId ? ((window as any).boardWindow || 3) : 3)); 
+                    // Note: Ideally board window is passed in props. 
+                    // For now, I'll default to 7 or check if I can pass it.
+                    // The prompt said "defaulting to 3".
+                    // Let's rely on props.schedulingWindowDays
+                    const limit = new Date();
+                    limit.setDate(today.getDate() + (schedulingWindowDays || 3));
+                    return selectedDate >= limit;
+                })()}
+                onClick={() => {
+                     const next = new Date(selectedDate);
+                     next.setDate(next.getDate() + 1);
+                     setSelectedDate(next);
+                }}
+            >
+                &gt;
+            </button>
         </div>
 
         <div className="space-y-4">

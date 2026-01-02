@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import type { CardType, StatusType } from '../../types';
+import type { CardType, StatusType, BoardType } from '../../types';
 import { apiClient } from '../../api/client';
 import { EisenhowerMatrixHelper } from './EisenhowerMatrixHelper';
 import { TipTapEditor } from '../../components/TipTapEditor';
@@ -7,6 +7,7 @@ import { SchedulePickerModal } from './SchedulePickerModal';
 
 interface CardDetailModalProps {
   card: CardType;
+  board?: BoardType | null;
   statuses: StatusType[];
   allCards: CardType[];
   onClose: () => void;
@@ -14,7 +15,7 @@ interface CardDetailModalProps {
   onDeleted: () => void;
 }
 
-export const CardDetailModal: React.FC<CardDetailModalProps> = ({ card, statuses, allCards, onClose, onUpdated, onDeleted }) => {
+export const CardDetailModal: React.FC<CardDetailModalProps> = ({ card, board, statuses, allCards, onClose, onUpdated, onDeleted }) => {
   const [formData, setFormData] = useState({
     title: card.title,
     description: card.description || '',
@@ -22,9 +23,21 @@ export const CardDetailModal: React.FC<CardDetailModalProps> = ({ card, statuses
     priority: card.priority,
     statusId: card.statusId,
   });
+
+  // Sync formData when card updates
+  useEffect(() => {
+    setFormData(prev => ({
+        ...prev,
+        title: card.title,
+        description: card.description || '',
+        difficulty: card.difficulty,
+        priority: card.priority,
+        statusId: card.statusId,
+    }));
+  }, [card]);
   const [selectedDependencies, setSelectedDependencies] = useState<string[]>([]);
   const [showEisenhower, setShowEisenhower] = useState(false);
-  const [editingTitle, setEditingTitle] = useState(false);
+
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -41,6 +54,14 @@ export const CardDetailModal: React.FC<CardDetailModalProps> = ({ card, statuses
 
   React.useEffect(() => {
     fetchUpdates();
+    // New Requirement: Check sync when opening a scheduled card
+    if (card.scheduledAt) {
+       apiClient.syncCalendar().then((result) => {
+         if (result.moved > 0 || result.deleted > 0) {
+            onUpdated(); // Refresh parent to get new data
+         }
+       }).catch(console.error);
+    }
   }, [card.id]);
 
   const fetchUpdates = async () => {
@@ -273,6 +294,7 @@ export const CardDetailModal: React.FC<CardDetailModalProps> = ({ card, statuses
         {showSchedulePicker && (
           <SchedulePickerModal 
             card={card}
+            schedulingWindowDays={board?.schedulingWindowDays || 3}
             onClose={() => setShowSchedulePicker(false)}
             onScheduled={onCardScheduled}
           />

@@ -57,7 +57,7 @@ interface DroppableColumnProps {
   children: React.ReactNode;
 }
 
-const DroppableColumn = ({ statusId, isCollapsed, children }: DroppableColumnProps) => {
+const DroppableColumn = ({ statusId, children }: DroppableColumnProps) => {
   const { setNodeRef, isOver } = useDroppable({
     id: statusId,
   });
@@ -80,17 +80,15 @@ export const BoardView = ({ boardId, onBack, onOpenPrioritise, onSwitchBoard }: 
       },
     })
   );
-  const [activeId, setActiveId] = useState<string | null>(null);
+
   const [dragCard, setDragCard] = useState<CardType | null>(null);
   
   const handleDragStart = (event: DragStartEvent) => {
-     setActiveId(event.active.id as string);
      setDragCard(event.active.data.current?.card || null);
   };
   
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
-    setActiveId(null);
     setDragCard(null);
 
     if (!over) return;
@@ -141,6 +139,24 @@ export const BoardView = ({ boardId, onBack, onOpenPrioritise, onSwitchBoard }: 
     setStatuses(boardStatuses);
     setCards(boardCards);
     setLoading(false);
+
+    // Non-blocking sync
+    apiClient.syncCalendar()
+      .then((result) => {
+         if (result.synced > 0 || result.moved > 0 || result.deleted > 0) {
+             console.log("Sync detected changes, refreshing...");
+             // Refresh only cards
+             apiClient.getCards(boardId).then((newCards) => {
+                 setCards(newCards);
+                 // If a card is open in viewer, refresh it too
+                 if (viewerCard) {
+                     const updatedViewerCard = newCards.find((c: any) => c.id === viewerCard.id);
+                     if (updatedViewerCard) setViewerCard(updatedViewerCard);
+                 }
+             });
+         }
+      })
+      .catch(err => console.error("Sync failed", err));
   };
   
   // Re-fetch when showSettingsModal closes to update UI with new colour
@@ -156,6 +172,11 @@ export const BoardView = ({ boardId, onBack, onOpenPrioritise, onSwitchBoard }: 
   const handleStatusChange = async (cardId: string, newStatusId: string) => {
     try {
       await apiClient.updateCard(cardId, { statusId: newStatusId });
+      
+      // Trigger sync logic if moved (optimistic or separate call? User asked for "when moved")
+      // We can just trigger the sync check in background
+      apiClient.syncCalendar().then(() => fetchData()).catch(err => console.error("Sync failed", err));
+
       // Refresh cards
       const boardCards = await apiClient.getCards(boardId);
       setCards(boardCards);
@@ -181,7 +202,7 @@ export const BoardView = ({ boardId, onBack, onOpenPrioritise, onSwitchBoard }: 
 
   const onCardScheduled = () => {
     setSchedulingCard(null);
-    fetchData(); // Refresh board to show card in new lane
+    fetchData(); 
   };
 
   const getCardsByStatus = (statusId: string) => {
@@ -400,6 +421,7 @@ export const BoardView = ({ boardId, onBack, onOpenPrioritise, onSwitchBoard }: 
       {schedulingCard && (
         <SchedulePickerModal 
           card={schedulingCard}
+          schedulingWindowDays={board?.schedulingWindowDays || 3}
           onClose={() => setSchedulingCard(null)}
           onScheduled={onCardScheduled}
         />
@@ -407,6 +429,7 @@ export const BoardView = ({ boardId, onBack, onOpenPrioritise, onSwitchBoard }: 
       {viewerCard && (
         <CardDetailModal 
           card={viewerCard}
+          board={board}
           statuses={statuses}
           allCards={cards}
           onClose={() => setViewerCard(null)}

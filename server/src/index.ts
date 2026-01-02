@@ -2,7 +2,7 @@ import Fastify from 'fastify';
 import { drizzle } from 'drizzle-orm/better-sqlite3';
 import Database from 'better-sqlite3';
 import * as schema from './schema.js';
-import { eq, and, or, desc } from 'drizzle-orm';
+import { eq, and, or, desc, isNotNull } from 'drizzle-orm';
 import dotenv from 'dotenv';
 import cors from '@fastify/cors';
 import { DAVClient } from 'tsdav';
@@ -262,10 +262,12 @@ async function getCalendarEvents(startTime: Date, endTime: Date) {
 
     return events.map(e => {
       const summary = e.data?.match(/SUMMARY:(.*)/)?.[1]?.trim() || 'Untitled';
+      const uid = e.data?.match(/UID:(.*)/)?.[1]?.trim();
       const startStr = e.data?.match(/DTSTART[:;](?:.*:)?(.*)/)?.[1]?.trim();
       const endStr = e.data?.match(/DTEND[:;](?:.*:)?(.*)/)?.[1]?.trim();
 
       return {
+        uid,
         summary,
         start: { dateTime: startStr ? new Date(startStr.replace(/(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})Z?/, '$1-$2-$3T$4:$5:$6Z')) : startTime },
         end: { dateTime: endStr ? new Date(endStr.replace(/(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})Z?/, '$1-$2-$3T$4:$5:$6Z')) : endTime },
@@ -335,9 +337,51 @@ async function createCalendarEvent(title: string, startTime: Date, durationMinut
       filename: `${uid}.ics`,
       iCalString: icalData,
     });
+    return uid;
   } catch (error: any) {
     fastify.log.error({ msg: error.message, url: serverUrl }, 'createCalendarEvent failed');
     throw error;
+  }
+}
+
+async function deleteCalendarEvent(uid: string) {
+  const accessToken = await refreshGoogleToken();
+  const settings = await db.select().from(schema.appSettings).where(eq(schema.appSettings.id, 'singleton'));
+  
+  if (!accessToken || !settings[0]) return;
+
+  const email = (settings[0].googleCalendarId && settings[0].googleCalendarId !== 'primary') 
+    ? settings[0].googleCalendarId 
+    : 'primary';
+
+  const serverUrl = email !== 'primary'
+    ? `https://apidata.googleusercontent.com/caldav/v2/${email}/user/`
+    : 'https://apidata.googleusercontent.com/caldav/v2/';
+
+  try {
+    const client = new DAVClient({
+      serverUrl,
+      credentials: { accessToken },
+      authMethod: 'Custom',
+      authFunction: async () => ({
+        authorization: `Bearer ${accessToken}`
+      }),
+      defaultAccountType: 'caldav',
+    });
+
+    await client.login();
+    const calendars = await client.fetchCalendars();
+    const primary = calendars.find(c => c.url.includes('primary') || c.url.includes(email)) || calendars[0];
+
+    // Construct object URL manually
+    const objectUrl = primary.url.endsWith('/') ? `${primary.url}${uid}.ics` : `${primary.url}/${uid}.ics`;
+    
+    // @ts-ignore - deleteObject not publicly typed in some versions but exists
+    await client.deleteObject(objectUrl);
+    fastify.log.info({ uid }, 'Deleted old calendar event');
+  } catch (error: any) {
+    // If it fails (e.g. 404), just log it and move on, don't block the new schedule
+    fastify.log.warn({ msg: error.message, uid }, 'Failed to delete old calendar event');
   }
 }
 
@@ -444,7 +488,13 @@ fastify.post('/api/scheduler/auto', async (request) => {
     await db.update(schema.cards).set({ scheduledAt: new Date(currentTime) }).where(eq(schema.cards.id, card.id));
     
     // Create event in Google Calendar (CalDAV)
-    await createCalendarEvent(`[Prios] ${card.title}`, new Date(currentTime), card.difficulty * 30);
+    // Check if we need to delete an old one? Auto-schedule usually runs on backlog, but just in case
+    if (card.externalEventId) {
+        await deleteCalendarEvent(card.externalEventId);
+    }
+    const eventId = await createCalendarEvent(`[Prios] ${card.title}`, new Date(currentTime), card.difficulty * 30);
+    
+    await db.update(schema.cards).set({ scheduledAt: new Date(currentTime), externalEventId: eventId }).where(eq(schema.cards.id, card.id));
 
     results.push({ id: card.id, title: card.title, scheduledAt: new Date(currentTime) });
     scheduledIds.add(card.id);
@@ -490,6 +540,7 @@ fastify.post('/api/boards', async (request) => {
     availabilitySchedule,
     colour: finalColour,
     order: maxOrder + 1,
+    schedulingWindowDays: request.body.schedulingWindowDays || 3,
   }).returning();
   
   const board = result[0];
@@ -679,30 +730,46 @@ fastify.patch('/api/cards/:id', async (request, reply) => {
 
 fastify.get('/api/cards/:id/schedule-suggestions', async (request, reply) => {
   const { id } = request.params as any;
+  const { date } = request.query as any; // YYYY-MM-DD
+
   const cardResult = await db.select().from(schema.cards).where(eq(schema.cards.id, id));
   if (!cardResult[0]) return reply.status(404).send({ error: 'Card not found' });
   const card = cardResult[0];
 
-  const todayStart = new Date();
-  todayStart.setHours(0,0,0,0);
-  const tomorrowEnd = new Date();
-  tomorrowEnd.setDate(tomorrowEnd.getDate() + 1);
-  tomorrowEnd.setHours(23,59,59,999);
+  let targetDate = new Date();
+  if (date) {
+    targetDate = new Date(date);
+  }
   
-  const events = await getCalendarEvents(todayStart, tomorrowEnd);
+  // Set range for the requested day
+  const rangeStart = new Date(targetDate);
+  rangeStart.setHours(0,0,0,0);
+  
+  const rangeEnd = new Date(targetDate);
+  rangeEnd.setHours(23,59,59,999);
+  
+  // If today, don't show past slots
+  let currentTime = rangeStart.getTime();
+  if (rangeStart.toDateString() === new Date().toDateString()) {
+    currentTime = Math.max(Date.now(), currentTime);
+  }
+
+  const events = await getCalendarEvents(rangeStart, rangeEnd);
   const busySlots = events.map((event: any) => ({
     start: new Date(event.start.dateTime || event.start.date).getTime(),
     end: new Date(event.end.dateTime || event.end.date).getTime(),
   }));
 
   const suggestions = [];
-  let currentTime = Date.now();
+  
   // Round to next 15 mins
   currentTime = Math.ceil(currentTime / (15 * 60 * 1000)) * (15 * 60 * 1000);
   
   const durationMs = card.difficulty * 30 * 60 * 1000;
   
-  while (suggestions.length < 5 && currentTime < tomorrowEnd.getTime()) {
+
+  
+  while (suggestions.length < 5 && currentTime < rangeEnd.getTime()) {
     const slotEnd = currentTime + durationMs;
 
     // Check board schedule
@@ -722,8 +789,26 @@ fastify.get('/api/cards/:id/schedule-suggestions', async (request, reply) => {
       suggestions.push({
         startTime: new Date(currentTime).toISOString(),
         endTime: new Date(slotEnd).toISOString(),
-        label: new Date(currentTime).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) + 
-                (new Date(currentTime).getDate() !== new Date().getDate() ? ' (Tomorrow)' : '')
+        label: (() => {
+          const slotDate = new Date(currentTime);
+          const today = new Date();
+          const tomorrow = new Date(today);
+          tomorrow.setDate(today.getDate() + 1);
+          
+          const timeStr = slotDate.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+          
+          // Check if same day
+          if (slotDate.toDateString() === today.toDateString()) {
+            return timeStr;
+          }
+          // Check if tomorrow
+          if (slotDate.toDateString() === tomorrow.toDateString()) {
+            return `${timeStr} (Tomorrow)`;
+          }
+          // Otherwise show day name
+          const dayName = slotDate.toLocaleDateString('en-GB', { weekday: 'short' });
+          return `${timeStr} (${dayName})`;
+        })()
       });
       currentTime += durationMs + (60 * 60 * 1000); // 1 hour gap between suggestions
       currentTime = Math.ceil(currentTime / (15 * 60 * 1000)) * (15 * 60 * 1000);
@@ -794,14 +879,43 @@ fastify.post('/api/cards/:id/schedule', async (request, reply) => {
     fastify.log.info({ boardId: card.boardId }, 'Auto-created missing Scheduled status lane');
   }
 
-  // 4. Update card
-  await db.update(schema.cards).set({
-    scheduledAt: finalScheduledAt,
-    statusId: scheduledStatus.id
-  }).where(eq(schema.cards.id, id));
+    // 4. Update card
+    // Check constraints before final update
+    // Check overlap with existing events if scheduled manually
+    if (scheduledAt) {
+       const checkStart = finalScheduledAt;
+       const checkEnd = new Date(finalScheduledAt.getTime() + finalDuration * 60000);
+       
+       // Re-fetch busy slots just to be safe or reuse
+       const busyStartCheck = new Date(checkStart.getTime());
+       const busyEndCheck = new Date(checkEnd.getTime());
+       busyStartCheck.setHours(0,0,0,0);
+       busyEndCheck.setHours(23,59,59,999);
+       
+       const checkEvents = await getCalendarEvents(busyStartCheck, busyEndCheck);
+       const conflict = checkEvents.find((e: any) => {
+          const eStart = new Date(e.start.dateTime || e.start.date).getTime();
+          const eEnd = new Date(e.end.dateTime || e.end.date).getTime();
+          return (checkStart.getTime() < eEnd && checkEnd.getTime() > eStart);
+       });
+       
+       if (conflict) {
+          return reply.status(409).send({ error: 'Selected time overlaps with an existing calendar event.' });
+       }
+    }
 
-  // 5. Create Calendar Event
-  await createCalendarEvent(`[Prios] ${card.title}`, finalScheduledAt, finalDuration);
+    // Delete old event if exists
+    if (card.externalEventId) {
+        await deleteCalendarEvent(card.externalEventId);
+    }
+
+    const eventId = await createCalendarEvent(`[Prios] ${card.title}`, finalScheduledAt, finalDuration);
+
+    await db.update(schema.cards).set({
+      scheduledAt: finalScheduledAt,
+      statusId: scheduledStatus.id,
+      externalEventId: eventId,
+    }).where(eq(schema.cards.id, id));
 
   return { success: true, scheduledAt: finalScheduledAt };
 });
@@ -900,6 +1014,77 @@ fastify.get('/api/stats', async () => {
     efficiency: Math.round(efficiency),
     history: last7Days,
   };
+
+});
+
+// Calendar Sync
+fastify.post('/api/calendar/sync', async (request) => {
+  // 1. Get all cards that are scheduled and have an externalEventId
+  const scheduledCards = await db.select()
+    .from(schema.cards)
+    .innerJoin(schema.statuses, eq(schema.cards.statusId, schema.statuses.id))
+    .where(and(
+      eq(schema.statuses.category, 'scheduled'),
+      isNotNull(schema.cards.externalEventId) // Is Not Null check
+    ));
+
+  if (scheduledCards.length === 0) return { synced: 0, moved: 0, deleted: 0 };
+
+  // Calculate time range to fetch from Google
+  const timestamps = scheduledCards.map(c => c.cards.scheduledAt?.getTime() || 0).filter(t => t > 0);
+  if (timestamps.length === 0) return { synced: 0, moved: 0, deleted: 0 };
+
+  const minTime = new Date(Math.min(...timestamps));
+  const maxTime = new Date(Math.max(...timestamps));
+  // Add buffers
+  minTime.setHours(0,0,0,0);
+  maxTime.setHours(23,59,59,999);
+  // Extend maxTime to cover potential moves? For now just day scope.
+  // Better to fetch +/- 7 days or simpler: fetch broad range
+  maxTime.setDate(maxTime.getDate() + 7); 
+  minTime.setDate(minTime.getDate() - 1);
+
+  const events = await getCalendarEvents(minTime, maxTime);
+  
+  let synced = 0;
+  let moved = 0;
+  let deleted = 0;
+
+  for (const card of scheduledCards) {
+    if (!card.cards.externalEventId) continue;
+    
+    // Find matching event
+    const event = events.find((e: any) => e.uid === card.cards.externalEventId || (e.uid && card.cards.externalEventId && e.uid.includes(card.cards.externalEventId)) || (card.cards.externalEventId && e.uid && card.cards.externalEventId.includes(e.uid)));
+    
+    if (!event) {
+        // Event deleted in Calendar -> Move to Maybe status, clear scheduledAt and externalEventId.
+        const maybeStatus = await db.select().from(schema.statuses).where(and(eq(schema.statuses.boardId, card.cards.boardId), eq(schema.statuses.category, 'maybe')));
+        if (maybeStatus[0]) {
+            await db.update(schema.cards).set({
+                statusId: maybeStatus[0].id,
+                scheduledAt: null,
+                externalEventId: null
+            }).where(eq(schema.cards.id, card.cards.id));
+            deleted++;
+        }
+    } else {
+        // Check for move
+        const eventStart = new Date(event.start.dateTime).getTime();
+        const currentStart = card.cards.scheduledAt?.getTime();
+        
+        // Tolerance of 1 minute
+        if (!currentStart || Math.abs(eventStart - currentStart) > 60000) {
+             await db.update(schema.cards).set({
+                scheduledAt: new Date(eventStart)
+             }).where(eq(schema.cards.id, card.cards.id));
+             moved++;
+        } else {
+            synced++;
+        }
+    }
+  }
+
+  return { synced, moved, deleted };
 });
 
 const start = async () => {

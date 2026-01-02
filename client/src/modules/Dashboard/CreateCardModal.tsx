@@ -15,7 +15,7 @@ interface CreateCardModalProps {
 
 export const CreateCardModal = ({ boardId, statuses, existingCards, initialStatusId, onClose, onCreated }: CreateCardModalProps) => {
   const [title, setTitle] = useState('');
-  const [aiSuggestions, setAiSuggestions] = useState<string[]>([]);
+
   
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {

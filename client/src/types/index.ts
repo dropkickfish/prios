@@ -4,6 +4,7 @@ export interface BoardType {
   order: number;
   availabilitySchedule: any;
   colour?: string;
+  schedulingWindowDays?: number;
 }
 
 export interface StatusType {

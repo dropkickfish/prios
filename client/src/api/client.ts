@@ -108,8 +108,10 @@ export const apiClient = {
     });
     return res.json();
   },
-  getScheduleSuggestions: async (cardId: string): Promise<{ suggestions: Array<{ startTime: string; endTime: string; label: string }>; currentDifficulty: number }> => {
-    const res = await fetch(`${API_BASE}/cards/${cardId}/schedule-suggestions`);
+  getScheduleSuggestions: async (cardId: string, date?: string): Promise<{ suggestions: Array<{ startTime: string; endTime: string; label: string }>; currentDifficulty: number }> => {
+    const url = new URL(`${API_BASE}/cards/${cardId}/schedule-suggestions`);
+    if (date) url.searchParams.append('date', date);
+    const res = await fetch(url.toString());
     return res.json();
   },
   addDependency: async (blockingCardId: string, blockedCardId: string) => {
@@ -130,6 +132,10 @@ export const apiClient = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ content }),
     });
+    return res.json();
+  },
+  syncCalendar: async () => {
+    const res = await fetch(`${API_BASE}/calendar/sync`, { method: 'POST' });
     return res.json();
   }
 };

@@ -7,6 +7,7 @@ export const boards = sqliteTable('boards', {
   availabilitySchedule: text('availability_schedule', { mode: 'json' }).notNull(), // JSON: { mon: ["09:00-17:00"], ... }
   order: integer('order').notNull().default(0),
   colour: text('colour'),
+  schedulingWindowDays: integer('scheduling_window_days').default(3).notNull(),
 });
 
 export const statuses = sqliteTable('statuses', {
@@ -26,6 +27,7 @@ export const cards = sqliteTable('cards', {
   difficulty: integer('difficulty').notNull(), // 1-5
   priority: integer('priority').notNull(), // 1-5
   scheduledAt: integer('scheduled_at', { mode: 'timestamp' }),
+  externalEventId: text('external_event_id'),
 });
 
 export const cardUpdates = sqliteTable('card_updates', {
