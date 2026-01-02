@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 
 import type { BoardType } from '../../types';
 
@@ -29,6 +29,14 @@ export const BoardSettingsModal: React.FC<BoardSettingsModalProps> = ({ board, o
 
   // Schedule State
   const [schedule, setSchedule] = useState<any>(board.availabilitySchedule || {});
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [onClose]);
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();

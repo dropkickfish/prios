@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import type { CardType, StatusType } from '../../types';
 import { apiClient } from '../../api/client';
 import { EisenhowerMatrixHelper } from './EisenhowerMatrixHelper';
@@ -24,6 +24,15 @@ export const CardDetailModal: React.FC<CardDetailModalProps> = ({ card, statuses
   });
   const [selectedDependencies, setSelectedDependencies] = useState<string[]>([]);
   const [showEisenhower, setShowEisenhower] = useState(false);
+  const [editingTitle, setEditingTitle] = useState(false);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [onClose]);
   const [saving, setSaving] = useState(false);
   const [updates, setUpdates] = useState<any[]>([]);
   const [newComment, setNewComment] = useState('');

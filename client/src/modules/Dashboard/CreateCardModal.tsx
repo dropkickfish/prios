@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import type { StatusType, CardType } from '../../types';
 import { apiClient } from '../../api/client';
 import { EisenhowerMatrixHelper } from './EisenhowerMatrixHelper';
@@ -15,6 +15,15 @@ interface CreateCardModalProps {
 
 export const CreateCardModal = ({ boardId, statuses, existingCards, initialStatusId, onClose, onCreated }: CreateCardModalProps) => {
   const [title, setTitle] = useState('');
+  const [aiSuggestions, setAiSuggestions] = useState<string[]>([]);
+  
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [onClose]);
   const [description, setDescription] = useState('');
   const [statusId] = useState(initialStatusId || statuses[0]?.id || '');
   const [difficulty, setDifficulty] = useState(3);

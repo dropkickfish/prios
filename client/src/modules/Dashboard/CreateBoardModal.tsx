@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { apiClient } from '../../api/client';
 
 interface CreateBoardModalProps {
@@ -8,6 +8,14 @@ interface CreateBoardModalProps {
 
 export const CreateBoardModal: React.FC<CreateBoardModalProps> = ({ onClose, onCreated }) => {
   const [name, setName] = useState('');
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [onClose]);
   const [loading, setLoading] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {

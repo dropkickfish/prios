@@ -1,4 +1,16 @@
 import { useState, useEffect } from 'react';
+import { 
+  DndContext, 
+  DragOverlay, 
+  useSensor, 
+  useSensors, 
+  PointerSensor, 
+  closestCorners,
+  defaultDropAnimationSideEffects,
+  type DragEndEvent,
+  type DragStartEvent
+} from '@dnd-kit/core';
+import { useDraggable, useDroppable } from '@dnd-kit/core';
 import type { BoardType, StatusType, CardType } from '../../types';
 import { apiClient } from '../../api/client';
 import { CardComponent } from '../../components/CardComponent';
@@ -6,13 +18,93 @@ import { CreateCardModal } from './CreateCardModal';
 import { SchedulePickerModal } from './SchedulePickerModal';
 import { CardDetailModal } from './CardDetailModal';
 import { BoardSettingsModal } from './BoardSettingsModal';
+import { BoardSwitcher } from './BoardSwitcher';
+import { FilterBar } from './FilterBar';
+import { useShortcut } from '../../context/KeyboardContext';
 
 interface BoardViewProps {
   boardId: string;
   onBack: () => void;
+  onOpenPrioritise: () => void;
+  onSwitchBoard: (boardId: string) => void;
 }
 
-export const BoardView = ({ boardId, onBack }: BoardViewProps) => {
+interface DraggableCardProps {
+  card: CardType;
+  children: React.ReactNode;
+}
+
+const DraggableCard = ({ card, children }: DraggableCardProps) => {
+  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
+    id: card.id,
+    data: { card }
+  });
+
+  const style = transform ? {
+    transform: `translate3d(${transform.x}px, ${transform.y}px, 0)`,
+  } : undefined;
+
+  return (
+    <div ref={setNodeRef} style={style} {...listeners} {...attributes} className={`${isDragging ? 'opacity-30' : ''} touch-none`}>
+      {children}
+    </div>
+  );
+};
+
+interface DroppableColumnProps {
+  statusId: string;
+  isCollapsed?: boolean;
+  children: React.ReactNode;
+}
+
+const DroppableColumn = ({ statusId, isCollapsed, children }: DroppableColumnProps) => {
+  const { setNodeRef, isOver } = useDroppable({
+    id: statusId,
+  });
+
+  return (
+    <div 
+      ref={setNodeRef} 
+      className={`flex flex-col gap-3 p-2 bg-base-200/30 rounded-[1.5rem] min-h-[250px] border transition-colors shadow-[inset_0_2px_10px_rgba(0,0,0,0.05)] backdrop-blur-sm ${isOver ? 'border-primary/50 bg-primary/5' : 'border-base-content/5'}`}
+    >
+      {children}
+    </div>
+  );
+};
+
+export const BoardView = ({ boardId, onBack, onOpenPrioritise, onSwitchBoard }: BoardViewProps) => {
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 8, // Require movement of 8px to start drag (prevents accidental drags on click)
+      },
+    })
+  );
+  const [activeId, setActiveId] = useState<string | null>(null);
+  const [dragCard, setDragCard] = useState<CardType | null>(null);
+  
+  const handleDragStart = (event: DragStartEvent) => {
+     setActiveId(event.active.id as string);
+     setDragCard(event.active.data.current?.card || null);
+  };
+  
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+    setActiveId(null);
+    setDragCard(null);
+
+    if (!over) return;
+
+    const cardId = active.id as string;
+    const newStatusId = over.id as string;
+    
+    // Find the card to check if status actually changed
+    const card = cards.find(c => c.id === cardId);
+    if (card && card.statusId !== newStatusId) {
+      handleStatusChange(cardId, newStatusId);
+    }
+  };
+
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [selectedStatusId, setSelectedStatusId] = useState<string | null>(null);
   const [schedulingCard, setSchedulingCard] = useState<CardType | null>(null);
@@ -22,6 +114,18 @@ export const BoardView = ({ boardId, onBack }: BoardViewProps) => {
   const [cards, setCards] = useState<CardType[]>([]);
   const [loading, setLoading] = useState(true);
   const [showSettingsModal, setShowSettingsModal] = useState(false);
+  const [collapsedCategories, setCollapsedCategories] = useState<string[]>(['scheduled', 'done', 'wontdo']);
+  const [filterText, setFilterText] = useState('');
+
+  // Shortcuts
+  useShortcut('new_card', () => {
+    // Only if we have a 'maybe' status to add to
+    const firstMaybe = statuses.find(s => s.category === 'maybe');
+    if (firstMaybe && !showCreateModal && !viewerCard && !schedulingCard) {
+      setSelectedStatusId(firstMaybe.id);
+      setShowCreateModal(true);
+    }
+  });
 
   const fetchData = async () => {
     const [boards, boardStatuses, boardCards] = await Promise.all([
@@ -45,7 +149,6 @@ export const BoardView = ({ boardId, onBack }: BoardViewProps) => {
     fetchData(); 
   };
 
-
   useEffect(() => {
     fetchData();
   }, [boardId]);
@@ -56,6 +159,17 @@ export const BoardView = ({ boardId, onBack }: BoardViewProps) => {
       // Refresh cards
       const boardCards = await apiClient.getCards(boardId);
       setCards(boardCards);
+
+      // Check if moved to Done
+      const newStatus = statuses.find(s => s.id === newStatusId);
+      if (newStatus?.category === 'done') {
+         // Small delay to let the animation finish or user register the move
+         setTimeout(() => {
+           if (window.confirm("Great job! Want to triage your backlog now?")) {
+             onOpenPrioritise();
+           }
+         }, 500);
+      }
     } catch (err: any) {
       alert(err.message || 'Failed to update status');
     }
@@ -71,7 +185,32 @@ export const BoardView = ({ boardId, onBack }: BoardViewProps) => {
   };
 
   const getCardsByStatus = (statusId: string) => {
-    return cards.filter(card => card.statusId === statusId);
+    return cards.filter(card => {
+       const matchesStatus = card.statusId === statusId;
+       const matchesFilter = filterText === '' || 
+         card.title.toLowerCase().includes(filterText.toLowerCase()) ||
+         (typeof card.description === 'string' && card.description.toLowerCase().includes(filterText.toLowerCase()));
+       return matchesStatus && matchesFilter;
+    });
+  };
+
+  const toggleColumn = (category: string) => {
+    setCollapsedCategories(prev => 
+      prev.includes(category) 
+        ? prev.filter(c => c !== category)
+        : [...prev, category]
+    );
+  };
+
+  // Define column order explicitly
+  const getCategoryOrder = (category: string) => {
+    switch (category) {
+      case 'maybe': return 1;
+      case 'doing': return 2;
+      case 'scheduled': return 3;
+      case 'done': return 4;
+      default: return 99;
+    }
   };
 
   if (loading) {
@@ -83,6 +222,13 @@ export const BoardView = ({ boardId, onBack }: BoardViewProps) => {
   }
 
   if (!board) return <div>Board not found.</div>;
+
+  const sortedStatuses = [...statuses].sort((a, b) => {
+     const orderA = getCategoryOrder(a.category);
+     const orderB = getCategoryOrder(b.category);
+     if (orderA !== orderB) return orderA - orderB;
+     return a.order - b.order;
+  });
 
   return (
     <div className="flex flex-col h-full space-y-6">
@@ -114,12 +260,20 @@ export const BoardView = ({ boardId, onBack }: BoardViewProps) => {
       )}
       <div className="flex justify-between items-center px-4">
         <div>
-          <h1 className={`text-4xl font-black text-${board.colour || 'base-content'} tracking-tight`}>{board.name}</h1>
+          <BoardSwitcher 
+             currentBoard={board} 
+             onSwitch={onSwitchBoard} 
+          />
           <div className="flex items-center gap-2 opacity-50 text-xs font-bold uppercase tracking-widest mt-1">
             <span className={`w-2 h-2 rounded-full animate-pulse bg-${board.colour || 'primary'}`}></span>
             Mission Control
           </div>
         </div>
+        
+        <div className="flex-1 flex justify-center px-8">
+           <FilterBar onFilterChange={setFilterText} />
+        </div>
+
         <div className="flex gap-3">
           <button onClick={() => setShowSettingsModal(true)} className="btn btn-ghost btn-circle btn-sm">
              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
@@ -146,73 +300,103 @@ export const BoardView = ({ boardId, onBack }: BoardViewProps) => {
         </div>
       </div>
 
-      <div className="flex overflow-x-auto gap-8 px-4 pb-12 min-h-[75vh] items-start scrollbar-hide">
-        {statuses.sort((a,b) => a.order - b.order).map(status => (
-          <div key={status.id} className="flex-shrink-0 w-80 flex flex-col gap-6">
-            <div className="flex justify-between items-center px-2">
-              <div className="flex items-center gap-3">
-                 <div className={`w-2 h-6 rounded-full ${
-                   status.category === 'doing' ? 'bg-primary' : 
-                   status.category === 'scheduled' ? 'bg-secondary' : 
-                   status.category === 'done' ? 'bg-success' : 
-                   status.category === 'maybe' ? 'bg-info' : 'bg-base-content/20'
-                 }`}></div>
-                 <h2 className="text-xs font-black uppercase tracking-[0.2em] opacity-50">{status.name}</h2>
-                 <span className="badge badge-sm badge-ghost font-bold opacity-30">{getCardsByStatus(status.id).length}</span>
-              </div>
-            </div>
-            
-            <div className="flex flex-col gap-5 p-5 bg-base-200/30 rounded-[2.5rem] min-h-[250px] border border-base-content/5 shadow-[inset_0_2px_10px_rgba(0,0,0,0.05)] backdrop-blur-sm">
-              {getCardsByStatus(status.id).map(card => (
-                <div key={card.id} className="group relative">
-                  <CardComponent 
-                    card={card} 
-                    onClick={() => !(showCreateModal || viewerCard || schedulingCard) && setViewerCard(card)} 
-                    onStatusChange={(newStatusId) => handleStatusChange(card.id, newStatusId)}
-                  />
-                  {!(showCreateModal || viewerCard || schedulingCard) && (
-                    <div className="mt-3 flex flex-wrap gap-1 opacity-0 group-hover:opacity-100 transition-all duration-300 justify-center absolute -bottom-2 left-2 right-2 translate-y-full z-20 bg-base-100/90 backdrop-blur-md p-3 rounded-2xl shadow-2xl border border-base-content/10 scale-95 group-hover:scale-100">
+      <DndContext 
+        sensors={sensors} 
+        collisionDetection={closestCorners} 
+        onDragStart={handleDragStart}
+        onDragEnd={handleDragEnd}
+      >
+      <div className="flex overflow-x-auto gap-8 px-4 pb-12 min-h-[75vh] items-start scrollbar-hide justify-center">
+        {sortedStatuses.map(status => {
+          const isCollapsed = collapsedCategories.includes(status.category);
+          return (
+            <div key={status.id} className={`flex-shrink-0 flex flex-col gap-6 transition-all duration-300 ${isCollapsed ? 'w-16' : 'w-80'}`}>
+              <div className="flex justify-between items-center px-2">
+                <div className="flex items-center gap-3">
+                   <div className={`w-2 h-6 rounded-full cursor-pointer hover:scale-110 transition-transform ${
+                     status.category === 'doing' ? 'bg-primary' : 
+                     status.category === 'scheduled' ? 'bg-secondary' : 
+                     status.category === 'done' ? 'bg-success' : 
+                     status.category === 'maybe' ? 'bg-info' : 'bg-base-content/20'
+                   }`} onClick={() => toggleColumn(status.category)}></div>
+                   
+                   {!isCollapsed && (
+                     <>
+                      <h2 className="text-xs font-black uppercase tracking-[0.2em] opacity-50">{status.name}</h2>
+                      <span className="badge badge-sm badge-ghost font-bold opacity-30">{getCardsByStatus(status.id).length}</span>
+                      
                       {status.category === 'maybe' && (
                         <button 
-                          onClick={() => handleSchedule(card)}
-                          className="btn btn-xs btn-primary btn-outline gap-1 rounded-lg font-black text-[9px] uppercase tracking-wider"
+                          onClick={onOpenPrioritise}
+                          className="ml-auto btn btn-xs btn-circle btn-ghost opacity-50 hover:opacity-100"
+                          title="Open Triage Mode"
                         >
-                          ⚡ Schedule Now
+                           <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4">
+                             <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 13.5l10.5-11.25L12 10.5h8.25L9.75 21.75 12 13.5H3.75z" />
+                           </svg>
                         </button>
                       )}
-                      <div className="w-full h-px bg-base-content/5 my-1"></div>
-                      <div className="flex flex-wrap gap-1 justify-center">
-                        {statuses.filter(s => s.id !== status.id).map(s => (
-                          <button 
-                            key={s.id}
-                            onClick={() => handleStatusChange(card.id, s.id)}
-                            className="btn btn-xs btn-ghost text-[9px] uppercase font-bold tracking-tight hover:bg-primary hover:text-white rounded-lg px-2"
-                          >
-                            → {s.name}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  )}
+                     </>
+                   )}
                 </div>
-              ))}
-              {status.category === 'maybe' && (
-                <button 
-                  disabled={!!(showCreateModal || viewerCard || schedulingCard)}
-                  onClick={() => {
-                    setSelectedStatusId(status.id);
-                    setShowCreateModal(true);
-                  }} 
-                  className="btn btn-ghost btn-sm py-8 opacity-20 hover:opacity-100 border-dashed border-2 border-base-content/20 rounded-3xl group flex flex-col gap-1 disabled:opacity-5"
-                >
-                  <span className="text-xl group-hover:scale-125 transition-transform">+</span>
-                  <span className="text-[10px] uppercase font-black tracking-widest">New Card</span>
-                </button>
+                {!isCollapsed && (
+                   <button onClick={() => toggleColumn(status.category)} className="btn btn-xs btn-ghost btn-circle opacity-0 group-hover:opacity-30">
+                     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4">
+                       <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" />
+                     </svg>
+                   </button>
+                )}
+              </div>
+              
+              {isCollapsed ? (
+                 <div 
+                   onClick={() => toggleColumn(status.category)}
+                   className="h-full min-h-[250px] bg-base-200/50 rounded-full flex flex-col items-center py-4 gap-4 cursor-pointer hover:bg-base-200 transition-colors border border-transparent hover:border-base-content/10"
+                 >
+                    <span className="text-xs font-black opacity-30 rotate-180" style={{ writingMode: 'vertical-rl' }}>{status.name}</span>
+                    <span className="badge badge-sm badge-ghost font-bold">{getCardsByStatus(status.id).length}</span>
+                 </div>
+              ) : (
+                <DroppableColumn statusId={status.id}>
+                  {getCardsByStatus(status.id).map(card => (
+                    <DraggableCard key={card.id} card={card}>
+                      <CardComponent 
+                        card={card} 
+                        statuses={statuses}
+                        showActions={true}
+                        onClick={() => !(showCreateModal || viewerCard || schedulingCard) && setViewerCard(card)} 
+                        onStatusChange={(newStatusId) => handleStatusChange(card.id, newStatusId)}
+                        onSchedule={handleSchedule}
+                      />
+                    </DraggableCard>
+                  ))}
+                  {status.category === 'maybe' && (
+                    <button 
+                      disabled={!!(showCreateModal || viewerCard || schedulingCard)}
+                      onClick={() => {
+                        setSelectedStatusId(status.id);
+                        setShowCreateModal(true);
+                      }} 
+                      className="btn btn-ghost btn-sm py-4 opacity-40 hover:opacity-100 border-dashed border-2 border-base-content/20 rounded-xl group flex gap-2 disabled:opacity-5 w-full"
+                    >
+                      <span className="text-lg group-hover:scale-125 transition-transform">+</span>
+                      <span className="text-[10px] uppercase font-black tracking-widest">Add Task</span>
+                    </button>
+                  )}
+                </DroppableColumn>
               )}
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
+      <DragOverlay dropAnimation={{ sideEffects: defaultDropAnimationSideEffects({ styles: { active: { opacity: '0.5' } } }) }}>
+         {dragCard ? (
+            <div className="rotate-3 scale-105 pointer-events-none">
+                <CardComponent card={dragCard} showActions={false} />
+            </div>
+         ) : null}
+      </DragOverlay>
+      </DndContext>
       {schedulingCard && (
         <SchedulePickerModal 
           card={schedulingCard}

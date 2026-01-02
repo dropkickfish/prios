@@ -16,7 +16,15 @@ interface Suggestion {
 
 export const SchedulePickerModal: React.FC<SchedulePickerModalProps> = ({ card, onClose, onScheduled }) => {
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [onClose]);
   const [duration, setDuration] = useState(card.difficulty * 30);
   const [scheduling, setScheduling] = useState(false);
 

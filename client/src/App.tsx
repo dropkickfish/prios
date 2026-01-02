@@ -7,6 +7,9 @@ import { Prioritise } from './modules/Prioritise/Prioritise';
 import { Stats } from './modules/Stats/Stats';
 import { Settings } from './modules/Settings/Settings';
 
+// ... imports
+import { KeyboardProvider } from './context/KeyboardContext';
+
 function App() {
   const [view, setView] = useState<'dashboard' | 'execute' | 'board' | 'prioritise' | 'stats' | 'settings'>('dashboard');
   const [selectedBoardId, setSelectedBoardId] = useState<string | null>(null);
@@ -27,30 +30,37 @@ function App() {
   };
 
   return (
-    <Layout currentView={view} onNavigate={(v) => setView(v as any)}>
-      {view === 'dashboard' && (
-        <Dashboard 
-          onOpenExecute={handleOpenExecute} 
-          onOpenBoard={handleOpenBoard} 
-          onOpenPrioritise={handleOpenPrioritise} 
-        />
-      )}
-      {view === 'board' && selectedBoardId && (
-        <BoardView boardId={selectedBoardId} onBack={() => setView('dashboard')} />
-      )}
-      {view === 'execute' && selectedBoardId && (
-        <Execute boardId={selectedBoardId} onBack={() => setView('dashboard')} />
-      )}
-      {view === 'prioritise' && selectedBoardId && (
-        <Prioritise 
-          boardId={selectedBoardId} 
-          onBack={() => setView('dashboard')} 
-          onViewExecute={() => setView('execute')}
-        />
-      )}
-      {view === 'stats' && <Stats />}
-      {view === 'settings' && <Settings />}
-    </Layout>
+    <KeyboardProvider>
+      <Layout currentView={view} onNavigate={(v) => setView(v as any)}>
+        {view === 'dashboard' && (
+          <Dashboard 
+            onOpenExecute={handleOpenExecute} 
+            onOpenBoard={handleOpenBoard} 
+            onOpenPrioritise={handleOpenPrioritise} 
+          />
+        )}
+        {view === 'board' && selectedBoardId && (
+          <BoardView 
+            boardId={selectedBoardId} 
+            onBack={() => setView('dashboard')} 
+            onOpenPrioritise={() => handleOpenPrioritise(selectedBoardId)}
+            onSwitchBoard={(newBoardId) => setSelectedBoardId(newBoardId)}
+          />
+        )}
+        {view === 'execute' && selectedBoardId && (
+          <Execute boardId={selectedBoardId} onBack={() => setView('dashboard')} />
+        )}
+        {view === 'prioritise' && selectedBoardId && (
+          <Prioritise 
+            boardId={selectedBoardId} 
+            onBack={() => setView('dashboard')} 
+            onViewExecute={() => setView('execute')}
+          />
+        )}
+        {view === 'stats' && <Stats />}
+        {view === 'settings' && <Settings />}
+      </Layout>
+    </KeyboardProvider>
   );
 }
 
