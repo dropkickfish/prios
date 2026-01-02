@@ -3,9 +3,10 @@ import { Layout } from './components/Layout';
 import { Dashboard } from './modules/Dashboard/Dashboard';
 import { Execute } from './modules/Execute/Execute';
 import { BoardView } from './modules/Dashboard/BoardView';
+import { Prioritise } from './modules/Prioritise/Prioritise';
 
 function App() {
-  const [view, setView] = useState<'dashboard' | 'execute' | 'board'>('dashboard');
+  const [view, setView] = useState<'dashboard' | 'execute' | 'board' | 'prioritise'>('dashboard');
   const [selectedBoardId, setSelectedBoardId] = useState<string | null>(null);
 
   const handleOpenExecute = (boardId: string) => {
@@ -18,14 +19,32 @@ function App() {
     setView('board');
   };
 
+  const handleOpenPrioritise = (boardId: string) => {
+    setSelectedBoardId(boardId);
+    setView('prioritise');
+  };
+
   return (
-    <Layout currentView={view} onNavigate={(v) => setView(v as 'dashboard' | 'execute' | 'board')}>
-      {view === 'dashboard' && <Dashboard onOpenExecute={handleOpenExecute} onOpenBoard={handleOpenBoard} />}
+    <Layout currentView={view} onNavigate={(v) => setView(v as any)}>
+      {view === 'dashboard' && (
+        <Dashboard 
+          onOpenExecute={handleOpenExecute} 
+          onOpenBoard={handleOpenBoard} 
+          onOpenPrioritise={handleOpenPrioritise} 
+        />
+      )}
       {view === 'board' && selectedBoardId && (
         <BoardView boardId={selectedBoardId} onBack={() => setView('dashboard')} />
       )}
       {view === 'execute' && selectedBoardId && (
         <Execute boardId={selectedBoardId} onBack={() => setView('dashboard')} />
+      )}
+      {view === 'prioritise' && selectedBoardId && (
+        <Prioritise 
+          boardId={selectedBoardId} 
+          onBack={() => setView('dashboard')} 
+          onViewExecute={() => setView('execute')}
+        />
       )}
     </Layout>
   );

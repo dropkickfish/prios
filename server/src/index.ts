@@ -4,6 +4,7 @@ import Database from 'better-sqlite3';
 import * as schema from './schema.js';
 import { eq, and, or, desc } from 'drizzle-orm';
 import dotenv from 'dotenv';
+import cors from '@fastify/cors';
 
 dotenv.config();
 
@@ -12,6 +13,10 @@ export const db = drizzle(sqlite, { schema });
 
 const fastify = Fastify({
   logger: true,
+});
+
+await fastify.register(cors, {
+  origin: true, // For development, allow all origins
 });
 
 fastify.get('/health', async () => {

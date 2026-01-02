@@ -2,12 +2,15 @@ import { useState, useEffect } from 'react';
 import { apiClient } from '../../api/client';
 import type { BoardType } from '../../types';
 
+export { BoardView } from './BoardView';
+
 interface DashboardProps {
   onOpenExecute: (boardId: string) => void;
   onOpenBoard: (boardId: string) => void;
+  onOpenPrioritise: (boardId: string) => void;
 }
 
-export const Dashboard = ({ onOpenExecute, onOpenBoard }: DashboardProps) => {
+export const Dashboard = ({ onOpenExecute, onOpenBoard, onOpenPrioritise }: DashboardProps) => {
   const [boards, setBoards] = useState<BoardType[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -53,6 +56,7 @@ export const Dashboard = ({ onOpenExecute, onOpenBoard }: DashboardProps) => {
                 <p className="opacity-70 text-sm">Productivity hub for {board.name}.</p>
                 <div className="card-actions justify-end mt-6 gap-3">
                   <button onClick={() => onOpenBoard(board.id)} className="btn btn-sm btn-outline opacity-50 hover:opacity-100">View Board</button>
+                  <button onClick={() => onOpenPrioritise(board.id)} className="btn btn-sm btn-secondary text-white border-none shadow-md shadow-secondary/10">Prioritise</button>
                   <button onClick={() => onOpenExecute(board.id)} className="btn btn-sm btn-primary text-white border-none shadow-md shadow-primary/30">Execute</button>
                 </div>
               </div>
