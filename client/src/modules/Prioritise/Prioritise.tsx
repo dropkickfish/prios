@@ -56,6 +56,7 @@ export const Prioritise = ({ boardId, onBack, onViewExecute }: PrioritiseProps) 
       }
     } else {
        // Move to next card in the maybe pile
+       await apiClient.recordAbandon();
        setCurrentIndex(prev => prev + 1);
     }
   };

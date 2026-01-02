@@ -23,6 +23,22 @@ fastify.get('/health', async () => {
   return { status: 'ok' };
 });
 
+// Helper for stats
+async function getOrCreateTodayStats() {
+  const today = new Date().toISOString().split('T')[0];
+  const existing = await db.select().from(schema.userStats).where(eq(schema.userStats.date, today));
+  if (existing[0]) return existing[0];
+  
+  const result = await db.insert(schema.userStats).values({
+    date: today,
+    completedCount: 0,
+    abandonedCount: 0,
+    difficultySum: 0,
+    prioritySum: 0,
+  }).returning();
+  return result[0];
+}
+
 // Boards
 fastify.get('/api/boards', async () => {
   return await db.select().from(schema.boards);
@@ -119,7 +135,6 @@ fastify.patch('/api/cards/:id', async (request, reply) => {
         .where(and(
           eq(schema.cards.boardId, card[0].boardId), 
           eq(schema.statuses.category, 'doing'),
-          or(eq(schema.cards.id, id), eq(schema.cards.id, id)) // placeholder for clarity, we expect 0 if we exclude current
         ));
       
       const otherDoing = existingDoing.filter(c => c.cards.id !== id);
@@ -140,6 +155,18 @@ fastify.patch('/api/cards/:id', async (request, reply) => {
       if (unfinished.length > 0) {
         return reply.status(400).send({ error: 'Task is blocked by unfinished dependencies.' });
       }
+    }
+
+    // Stats Logic: If moving to DONE, increment count
+    if (targetStatus[0].category === 'done') {
+      const stats = await getOrCreateTodayStats();
+      await db.update(schema.userStats)
+        .set({ 
+          completedCount: (stats.completedCount || 0) + 1,
+          difficultySum: (stats.difficultySum || 0) + card[0].difficulty,
+          prioritySum: (stats.prioritySum || 0) + card[0].priority
+        })
+        .where(eq(schema.userStats.date, stats.date));
     }
   }
 
@@ -188,6 +215,59 @@ fastify.delete('/api/dependencies/:id', async (request) => {
   const { id } = request.params as any;
   await db.delete(schema.dependencies).where(eq(schema.dependencies.id, id));
   return { success: true };
+});
+
+// Stats Endpoints
+fastify.post('/api/stats/abandon', async () => {
+  const stats = await getOrCreateTodayStats();
+  await db.update(schema.userStats)
+    .set({ abandonedCount: (stats.abandonedCount || 0) + 1 })
+    .where(eq(schema.userStats.date, stats.date));
+  return { success: true };
+});
+
+fastify.get('/api/stats', async () => {
+  const allStats = await db.select().from(schema.userStats).orderBy(desc(schema.userStats.date));
+  
+  // Calculate streak
+  let currentStreak = 0;
+  const today = new Date().toISOString().split('T')[0];
+  const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0];
+  
+  let checkDate = new Date();
+  while (true) {
+    const dateStr = checkDate.toISOString().split('T')[0];
+    const dayStat = allStats.find(s => s.date === dateStr);
+    
+    if (dayStat && (dayStat.completedCount || 0) > 0) {
+      currentStreak++;
+      checkDate.setDate(checkDate.getDate() - 1);
+    } else {
+      // If today is 0 completion, streak might still be alive if yesterday was > 0
+      if (dateStr === today) {
+        checkDate.setDate(checkDate.getDate() - 1);
+        continue;
+      }
+      break;
+    }
+  }
+
+  // Calculate velocity (last 7 days average completions)
+  const last7Days = allStats.slice(0, 7);
+  const totalCompleted = last7Days.reduce((sum, s) => sum + (s.completedCount || 0), 0);
+  const weeklyVelocity = totalCompleted / (last7Days.length || 1);
+
+  // Efficiency
+  const totalC = allStats.reduce((sum, s) => sum + (s.completedCount || 0), 0);
+  const totalA = allStats.reduce((sum, s) => sum + (s.abandonedCount || 0), 0);
+  const efficiency = totalC === 0 ? 0 : (totalC / (totalC + totalA)) * 100;
+
+  return {
+    currentStreak,
+    weeklyVelocity: parseFloat(weeklyVelocity.toFixed(1)),
+    efficiency: Math.round(efficiency),
+    history: last7Days,
+  };
 });
 
 const start = async () => {

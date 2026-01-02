@@ -51,5 +51,6 @@ export const userStats = sqliteTable('user_stats', {
   difficultySum: integer('difficulty_sum').default(0),
   prioritySum: integer('priority_sum').default(0),
   completedCount: integer('completed_count').default(0),
+  abandonedCount: integer('abandoned_count').default(0),
   isDayOff: integer('is_day_off', { mode: 'boolean' }).default(false),
 });

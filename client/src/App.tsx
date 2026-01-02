@@ -4,9 +4,10 @@ import { Dashboard } from './modules/Dashboard/Dashboard';
 import { Execute } from './modules/Execute/Execute';
 import { BoardView } from './modules/Dashboard/BoardView';
 import { Prioritise } from './modules/Prioritise/Prioritise';
+import { Stats } from './modules/Stats/Stats';
 
 function App() {
-  const [view, setView] = useState<'dashboard' | 'execute' | 'board' | 'prioritise'>('dashboard');
+  const [view, setView] = useState<'dashboard' | 'execute' | 'board' | 'prioritise' | 'stats'>('dashboard');
   const [selectedBoardId, setSelectedBoardId] = useState<string | null>(null);
 
   const handleOpenExecute = (boardId: string) => {
@@ -46,6 +47,7 @@ function App() {
           onViewExecute={() => setView('execute')}
         />
       )}
+      {view === 'stats' && <Stats />}
     </Layout>
   );
 }

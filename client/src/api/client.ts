@@ -35,5 +35,13 @@ export const apiClient = {
       body: JSON.stringify({ statusId }),
     });
     return res.json();
+  },
+  getStats: async () => {
+    const res = await fetch(`${API_BASE}/stats`);
+    return res.json();
+  },
+  recordAbandon: async () => {
+    const res = await fetch(`${API_BASE}/stats/abandon`, { method: 'POST' });
+    return res.json();
   }
 };
