@@ -41,7 +41,7 @@ export const FilterBar = ({ onFilterChange }: FilterBarProps) => {
              <input 
                ref={inputRef}
                type="text" 
-               placeholder={`Filter these cards... [${shortcuts.filter.toUpperCase()}]`}
+               placeholder={`Filter these cards... [${shortcuts.filter.key.toUpperCase()}]`}
                className="bg-transparent border-none outline-none w-full h-full text-sm font-bold placeholder:opacity-40"
                value={filterText}
                onChange={handleChange}

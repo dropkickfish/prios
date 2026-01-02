@@ -9,7 +9,30 @@ export const KeyboardSettings = () => {
   const actionLabels: Record<ShortcutAction, string> = {
     filter: 'Search / Filter Tasks',
     board_switch: 'Switch Board',
-    new_card: 'Create New Card'
+    new_card: 'Create New Card',
+    settings: 'Open Settings',
+    dashboard: 'Go to Dashboard',
+    stats: 'Go to Stats',
+    new_board: 'Create New Board',
+    board_1: 'Jump to Board 1',
+    board_2: 'Jump to Board 2',
+    board_3: 'Jump to Board 3',
+    board_4: 'Jump to Board 4',
+    board_5: 'Jump to Board 5',
+    board_6: 'Jump to Board 6',
+    board_7: 'Jump to Board 7',
+    board_8: 'Jump to Board 8',
+    board_9: 'Jump to Board 9',
+  };
+
+  const formatShortcut = (shortcut: typeof shortcuts[ShortcutAction]) => {
+    const parts: string[] = [];
+    if (shortcut.ctrl) parts.push('Ctrl');
+    if (shortcut.meta) parts.push('Cmd');
+    if (shortcut.shift) parts.push('Shift');
+    if (shortcut.alt) parts.push('Alt');
+    parts.push(shortcut.key.toUpperCase());
+    return parts.join('+');
   };
 
   const handleKeyDown = (e: React.KeyboardEvent, action: ShortcutAction) => {
@@ -20,7 +43,13 @@ export const KeyboardSettings = () => {
     if (['Control', 'Shift', 'Alt', 'Meta'].includes(e.key)) return;
 
     try {
-      updateShortcut(action, e.key);
+      updateShortcut(action, {
+        key: e.key,
+        ctrl: e.ctrlKey,
+        meta: e.metaKey,
+        shift: e.shiftKey,
+        alt: e.altKey,
+      });
       setEditingAction(null);
     } catch (err: any) {
       setError(err.message);
@@ -46,8 +75,8 @@ export const KeyboardSettings = () => {
                 <input
                   autoFocus
                   readOnly
-                  value="Press a key..."
-                  className="input input-sm input-primary w-24 text-center cursor-pointer"
+                  value="Press keys..."
+                  className="input input-sm input-primary w-32 text-center cursor-pointer"
                   onBlur={() => {
                     setEditingAction(null);
                     setError(null);
@@ -59,7 +88,7 @@ export const KeyboardSettings = () => {
                   onClick={() => setEditingAction(action)}
                   className="kbd kbd-md cursor-pointer hover:scale-110 transition-transform hover:border-primary"
                 >
-                  {shortcuts[action].toUpperCase()}
+                  {formatShortcut(shortcuts[action])}
                 </button>
               )}
             </div>

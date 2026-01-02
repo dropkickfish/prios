@@ -20,8 +20,11 @@ import { apiClient } from '../../api/client';
 import type { BoardType } from '../../types';
 import { CreateBoardModal } from './CreateBoardModal';
 import { BoardSettingsModal } from './BoardSettingsModal';
+import { useShortcut } from '../../context/KeyboardContext';
 
 export { BoardView } from './BoardView';
+
+const MAX_BOARDS = 9;
 
 interface DashboardProps {
   onOpenExecute: (boardId: string) => void;
@@ -31,13 +34,14 @@ interface DashboardProps {
 
 interface SortableBoardCardProps {
   board: BoardType;
+  index: number;
   onOpenExecute: (boardId: string) => void;
   onOpenBoard: (boardId: string) => void;
   onOpenPrioritise: (boardId: string) => void;
   onEdit: (board: BoardType) => void;
 }
 
-const SortableBoardCard = ({ board, onOpenExecute, onOpenBoard, onOpenPrioritise, onEdit }: SortableBoardCardProps) => {
+const SortableBoardCard = ({ board, index, onOpenExecute, onOpenBoard, onOpenPrioritise, onEdit }: SortableBoardCardProps) => {
   const {
     attributes,
     listeners,
@@ -61,8 +65,13 @@ const SortableBoardCard = ({ board, onOpenExecute, onOpenBoard, onOpenPrioritise
       {...attributes} 
       {...listeners}
       onClick={() => onOpenBoard(board.id)}
-      className={`card bg-base-100 shadow-xl border-t-4 border-${board.colour || 'secondary'} hover:scale-[1.02] transition-transform overflow-hidden cursor-pointer group`}
+      className={`card bg-base-100 shadow-xl border-t-4 border-${board.colour || 'secondary'} hover:scale-[1.02] transition-transform overflow-hidden cursor-pointer group relative`}
     >
+      {/* Board number badge */}
+      <div className="absolute top-3 left-3 badge badge-sm badge-ghost font-black opacity-30">
+        {index + 1}
+      </div>
+      
       <div className="card-body">
         <div className="flex justify-between items-start">
           <h2 className="card-title text-2xl font-black">{board.name}</h2>
@@ -125,6 +134,24 @@ export const Dashboard = ({ onOpenExecute, onOpenBoard, onOpenPrioritise }: Dash
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [editingBoard, setEditingBoard] = useState<BoardType | null>(null);
 
+  // Dashboard-specific shortcuts
+  useShortcut('new_board', () => {
+    if (boards.length < MAX_BOARDS) {
+      setShowCreateModal(true);
+    }
+  });
+
+  // Board jump shortcuts (1-9)
+  useShortcut('board_1', () => boards[0] && onOpenBoard(boards[0].id));
+  useShortcut('board_2', () => boards[1] && onOpenBoard(boards[1].id));
+  useShortcut('board_3', () => boards[2] && onOpenBoard(boards[2].id));
+  useShortcut('board_4', () => boards[3] && onOpenBoard(boards[3].id));
+  useShortcut('board_5', () => boards[4] && onOpenBoard(boards[4].id));
+  useShortcut('board_6', () => boards[5] && onOpenBoard(boards[5].id));
+  useShortcut('board_7', () => boards[6] && onOpenBoard(boards[6].id));
+  useShortcut('board_8', () => boards[7] && onOpenBoard(boards[7].id));
+  useShortcut('board_9', () => boards[8] && onOpenBoard(boards[8].id));
+
   const sensors = useSensors(
     useSensor(PointerSensor, {
       activationConstraint: {
@@ -168,14 +195,23 @@ export const Dashboard = ({ onOpenExecute, onOpenBoard, onOpenPrioritise }: Dash
     }
   };
 
+  const canCreateBoard = boards.length < MAX_BOARDS;
+
   return (
     <div className="space-y-8 text-secondary-content">
       <div className="flex justify-between items-center">
         <div>
           <h1 className="text-4xl font-black text-primary">Dashboard</h1>
-          <p className="opacity-60 text-base-content">Manage your boards and track your progress.</p>
+          <p className="opacity-60 text-base-content">Manage your boards and track your progress. {boards.length}/{MAX_BOARDS} boards</p>
         </div>
-        <button onClick={() => setShowCreateModal(true)} className="btn btn-primary shadow-lg shadow-primary/20 text-white border-none">Create New Board</button>
+        <button 
+          onClick={() => setShowCreateModal(true)} 
+          className="btn btn-primary shadow-lg shadow-primary/20 text-white border-none"
+          disabled={!canCreateBoard}
+          title={!canCreateBoard ? `Maximum ${MAX_BOARDS} boards reached` : 'Create New Board (N)'}
+        >
+          Create New Board
+        </button>
       </div>
 
       {loading ? (
@@ -193,10 +229,11 @@ export const Dashboard = ({ onOpenExecute, onOpenBoard, onOpenPrioritise }: Dash
             strategy={rectSortingStrategy}
           >
              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 text-base-content">
-              {boards.map(board => (
+              {boards.map((board, index) => (
                 <SortableBoardCard 
                   key={board.id} 
-                  board={board} 
+                  board={board}
+                  index={index}
                   onOpenBoard={onOpenBoard}
                   onOpenExecute={onOpenExecute}
                   onOpenPrioritise={onOpenPrioritise}
@@ -214,10 +251,21 @@ export const Dashboard = ({ onOpenExecute, onOpenBoard, onOpenPrioritise }: Dash
         </DndContext>
       )}
 
+      {!canCreateBoard && (
+        <div className="alert alert-warning shadow-lg">
+          <svg xmlns="http://www.w3.org/2000/svg" className="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
+          <span>You've reached the maximum of {MAX_BOARDS} boards. Delete a board to create a new one.</span>
+        </div>
+      )}
+
       {showCreateModal && (
         <CreateBoardModal 
           onClose={() => setShowCreateModal(false)}
-          onCreated={(newBoard) => setBoards([...boards, newBoard])}
+          onCreated={(newBoard) => {
+            if (boards.length < MAX_BOARDS) {
+              setBoards([...boards, newBoard]);
+            }
+          }}
         />
       )}
 
