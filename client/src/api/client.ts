@@ -1,3 +1,5 @@
+import type { CardType } from '../types';
+
 const API_BASE = 'http://localhost:3000/api';
 
 export const apiClient = {
@@ -42,6 +44,18 @@ export const apiClient = {
   },
   recordAbandon: async () => {
     const res = await fetch(`${API_BASE}/stats/abandon`, { method: 'POST' });
+    return res.json();
+  },
+  createCard: async (boardId: string, card: Partial<CardType>) => {
+    const res = await fetch(`${API_BASE}/boards/${boardId}/cards`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(card),
+    });
+    if (!res.ok) {
+      const error = await res.json();
+      throw new Error(error.error || 'Failed to create card');
+    }
     return res.json();
   }
 };

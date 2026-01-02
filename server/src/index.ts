@@ -50,7 +50,17 @@ fastify.post('/api/boards', async (request) => {
     name,
     availabilitySchedule,
   }).returning();
-  return result[0];
+  
+  const board = result[0];
+  
+  // Create default statuses
+  await db.insert(schema.statuses).values([
+    { boardId: board.id, name: 'Maybe', order: 1, category: 'maybe' },
+    { boardId: board.id, name: 'Doing', order: 2, category: 'doing' },
+    { boardId: board.id, name: 'Done', order: 3, category: 'done' },
+  ]);
+  
+  return board;
 });
 
 fastify.delete('/api/boards/:id', async (request) => {
@@ -64,7 +74,19 @@ fastify.delete('/api/boards/:id', async (request) => {
 // Statuses
 fastify.get('/api/boards/:boardId/statuses', async (request) => {
   const { boardId } = request.params as any;
-  return await db.select().from(schema.statuses).where(eq(schema.statuses.boardId, boardId)).orderBy(schema.statuses.order);
+  let boardStatuses = await db.select().from(schema.statuses).where(eq(schema.statuses.boardId, boardId)).orderBy(schema.statuses.order);
+  
+  // Auto-init if missing (for legacy boards or failed creation)
+  if (boardStatuses.length === 0) {
+    await db.insert(schema.statuses).values([
+      { boardId, name: 'Maybe', order: 1, category: 'maybe' },
+      { boardId, name: 'Doing', order: 2, category: 'doing' },
+      { boardId, name: 'Done', order: 3, category: 'done' },
+    ]);
+    boardStatuses = await db.select().from(schema.statuses).where(eq(schema.statuses.boardId, boardId)).orderBy(schema.statuses.order);
+  }
+  
+  return boardStatuses;
 });
 
 fastify.post('/api/boards/:boardId/statuses', async (request) => {

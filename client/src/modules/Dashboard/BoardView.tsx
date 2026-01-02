@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import type { BoardType, StatusType, CardType } from '../../types';
 import { apiClient } from '../../api/client';
 import { CardComponent } from '../../components/CardComponent';
+import { CreateCardModal } from './CreateCardModal';
 
 interface BoardViewProps {
   boardId: string;
@@ -9,6 +10,8 @@ interface BoardViewProps {
 }
 
 export const BoardView = ({ boardId, onBack }: BoardViewProps) => {
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [selectedStatusId, setSelectedStatusId] = useState<string | null>(null);
   const [board, setBoard] = useState<BoardType | null>(null);
   const [statuses, setStatuses] = useState<StatusType[]>([]);
   const [cards, setCards] = useState<CardType[]>([]);
@@ -63,6 +66,20 @@ export const BoardView = ({ boardId, onBack }: BoardViewProps) => {
 
   return (
     <div className="flex flex-col h-full space-y-6">
+      {showCreateModal && (
+        <CreateCardModal 
+          boardId={boardId} 
+          statuses={statuses} 
+          initialStatusId={selectedStatusId}
+          onClose={() => {
+            setShowCreateModal(false);
+            setSelectedStatusId(null);
+          }}
+          onCreated={(newCard) => {
+            setCards([...cards, newCard]);
+          }}
+        />
+      )}
       <div className="flex justify-between items-center">
         <div>
           <h1 className="text-3xl font-black text-base-content">{board.name}</h1>
@@ -70,7 +87,7 @@ export const BoardView = ({ boardId, onBack }: BoardViewProps) => {
         </div>
         <div className="flex gap-2">
           <button onClick={onBack} className="btn btn-ghost btn-sm">Back</button>
-          <button className="btn btn-primary btn-sm text-white">Add Card</button>
+          <button onClick={() => setShowCreateModal(true)} className="btn btn-primary btn-sm text-white border-none shadow-md shadow-primary/20">Add Card</button>
         </div>
       </div>
 
@@ -105,7 +122,15 @@ export const BoardView = ({ boardId, onBack }: BoardViewProps) => {
                   </div>
                 </div>
               ))}
-              <button className="btn btn-ghost btn-sm opacity-20 hover:opacity-100 border-dashed border-2 rounded-2xl">+ New Card</button>
+              <button 
+                onClick={() => {
+                  setSelectedStatusId(status.id);
+                  setShowCreateModal(true);
+                }} 
+                className="btn btn-ghost btn-sm opacity-20 hover:opacity-100 border-dashed border-2 rounded-2xl"
+              >
+                + New Card
+              </button>
             </div>
           </div>
         ))}
