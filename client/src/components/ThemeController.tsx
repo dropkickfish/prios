@@ -1,41 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useTheme } from './ThemeProvider';
 
 type Theme = 'winter' | 'night' | 'system';
-
-export const useTheme = () => {
-  const [theme, setTheme] = useState<Theme>(() => {
-    return (localStorage.getItem('theme') as Theme) || 'system';
-  });
-
-  useEffect(() => {
-    const root = window.document.documentElement;
-    
-    const applyTheme = (t: Theme) => {
-      let activeTheme = t;
-      if (t === 'system') {
-        activeTheme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'night' : 'winter';
-      }
-      root.setAttribute('data-theme', activeTheme);
-      if (activeTheme === 'night') {
-        root.classList.add('dark');
-      } else {
-        root.classList.remove('dark');
-      }
-    };
-
-    applyTheme(theme);
-    localStorage.setItem('theme', theme);
-
-    if (theme === 'system') {
-      const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
-      const handleChange = () => applyTheme('system');
-      mediaQuery.addEventListener('change', handleChange);
-      return () => mediaQuery.removeEventListener('change', handleChange);
-    }
-  }, [theme]);
-
-  return { theme, setTheme };
-};
 
 export const ThemeController = () => {
   const { theme, setTheme } = useTheme();
