@@ -15,6 +15,14 @@ export const apiClient = {
     });
     return res.json();
   },
+  reorderBoards: async (boards: { id: string; order: number }[]) => {
+    const res = await fetch(`${API_BASE}/boards/reorder`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ boards }),
+    });
+    return res.json();
+  },
   getStatuses: async (boardId: string) => {
     const res = await fetch(`${API_BASE}/boards/${boardId}/statuses`);
     return res.json();

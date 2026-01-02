@@ -418,16 +418,21 @@ async function getOrCreateTodayStats() {
   return result[0];
 }
 
-// Boards
 fastify.get('/api/boards', async () => {
-  return await db.select().from(schema.boards);
+  return await db.select().from(schema.boards).orderBy(schema.boards.order);
 });
 
 fastify.post('/api/boards', async (request) => {
   const { name, availabilitySchedule } = request.body as any;
+  
+  // Get max order
+  const existingBoards = await db.select().from(schema.boards);
+  const maxOrder = existingBoards.length > 0 ? Math.max(...existingBoards.map(b => b.order)) : 0;
+
   const result = await db.insert(schema.boards).values({
     name,
     availabilitySchedule,
+    order: maxOrder + 1,
   }).returning();
   
   const board = result[0];
@@ -495,6 +500,21 @@ fastify.patch('/api/boards/:id', async (request, reply) => {
   const updates = request.body as any;
   const result = await db.update(schema.boards).set(updates).where(eq(schema.boards.id, id)).returning();
   return result[0];
+});
+
+fastify.put('/api/boards/reorder', async (request) => {
+  const { boards } = request.body as any; // Array of { id, order }
+  
+  // Transaction would be better but simple loop works for SQLite
+  await db.transaction(async (tx) => {
+    for (const board of boards) {
+      await tx.update(schema.boards)
+        .set({ order: board.order })
+        .where(eq(schema.boards.id, board.id));
+    }
+  });
+
+  return { success: true };
 });
 
 fastify.post('/api/cards', async (request, reply) => {

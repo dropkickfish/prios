@@ -1,6 +1,7 @@
 export interface BoardType {
   id: string;
   name: string;
+  order: number;
   availabilitySchedule: any;
 }
 
