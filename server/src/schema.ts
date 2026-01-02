@@ -6,6 +6,7 @@ export const boards = sqliteTable('boards', {
   name: text('name').notNull(),
   availabilitySchedule: text('availability_schedule', { mode: 'json' }).notNull(), // JSON: { mon: ["09:00-17:00"], ... }
   order: integer('order').notNull().default(0),
+  colour: text('colour'),
 });
 
 export const statuses = sqliteTable('statuses', {

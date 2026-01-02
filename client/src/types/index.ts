@@ -3,6 +3,7 @@ export interface BoardType {
   name: string;
   order: number;
   availabilitySchedule: any;
+  colour?: string;
 }
 
 export interface StatusType {

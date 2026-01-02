@@ -27,6 +27,45 @@ fastify.get('/health', async () => {
   return { status: 'ok' };
 });
 
+function isTimeAllowed(startMs: number, endMs: number, schedule: any) {
+  if (!schedule) return { allowed: true };
+  const startDate = new Date(startMs);
+  const weekDay = startDate.toLocaleDateString('en-US', { weekday: 'short' }).toLowerCase(); // mon, tue...
+  const ranges = schedule[weekDay];
+  
+  if (!ranges || ranges.length === 0) {
+      const tomorrow = new Date(startDate);
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      tomorrow.setHours(0,0,0,0);
+      return { allowed: false, nextStart: tomorrow.getTime() };
+  }
+
+  for (const range of ranges) {
+      const [startStr, endStr] = range.split('-');
+      const [sH, sM] = startStr.split(':').map(Number);
+      const [eH, eM] = endStr.split(':').map(Number);
+      
+      const rangeStart = new Date(startDate);
+      rangeStart.setHours(sH, sM, 0, 0);
+      
+      const rangeEnd = new Date(startDate);
+      rangeEnd.setHours(eH, eM, 0, 0);
+      
+      if (startMs >= rangeStart.getTime() && endMs <= rangeEnd.getTime()) {
+          return { allowed: true };
+      }
+      
+      if (startMs < rangeStart.getTime()) {
+           return { allowed: false, nextStart: rangeStart.getTime() }; 
+      }
+  }
+  
+  const tomorrow = new Date(startDate);
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  tomorrow.setHours(0,0,0,0);
+  return { allowed: false, nextStart: tomorrow.getTime() };
+}
+
 // Google Auth Routes
 fastify.get('/api/auth/google/url', async () => {
   const params = new URLSearchParams({
@@ -348,8 +387,14 @@ fastify.post('/api/scheduler/auto', async (request) => {
     end: new Date(event.end.dateTime || event.end.date).getTime(),
   }));
 
+  // Fetch Board Schedule
+  const boardRes = await db.select().from(schema.boards).where(eq(schema.boards.id, boardId));
+  const boardSchedule = boardRes[0]?.availabilitySchedule;
+
   // 3. Scheduling Logic: Topological Sort + Priority
   let currentTime = Date.now();
+  // Round to next 15 mins
+  currentTime = Math.ceil(currentTime / (15 * 60 * 1000)) * (15 * 60 * 1000);
   const results = [];
   const scheduledIds = new Set();
   
@@ -379,6 +424,14 @@ fastify.post('/api/scheduler/auto', async (request) => {
     let foundSlot = false;
     while (!foundSlot) {
       const slotEnd = currentTime + durationMs;
+      
+      // Check board schedule
+      const constraint = isTimeAllowed(currentTime, slotEnd, boardSchedule);
+      if (!constraint.allowed) {
+        currentTime = constraint.nextStart || (currentTime + 5 * 60 * 1000);
+        continue;
+      }
+
       const conflict = busySlots.find(s => (currentTime < s.end && slotEnd > s.start));
       
       if (conflict) {
@@ -423,15 +476,19 @@ fastify.get('/api/boards', async () => {
 });
 
 fastify.post('/api/boards', async (request) => {
-  const { name, availabilitySchedule } = request.body as any;
+  const { name, availabilitySchedule, colour } = request.body as any;
   
   // Get max order
   const existingBoards = await db.select().from(schema.boards);
   const maxOrder = existingBoards.length > 0 ? Math.max(...existingBoards.map(b => b.order)) : 0;
 
+  const validColours = ['primary', 'secondary', 'accent', 'neutral', 'info', 'success', 'warning', 'error'];
+  const finalColour = colour || validColours[Math.floor(Math.random() * validColours.length)];
+
   const result = await db.insert(schema.boards).values({
     name,
     availabilitySchedule,
+    colour: finalColour,
     order: maxOrder + 1,
   }).returning();
   
@@ -647,6 +704,15 @@ fastify.get('/api/cards/:id/schedule-suggestions', async (request, reply) => {
   
   while (suggestions.length < 5 && currentTime < tomorrowEnd.getTime()) {
     const slotEnd = currentTime + durationMs;
+
+    // Check board schedule
+    const constraint = isTimeAllowed(currentTime, slotEnd, card.boardId ? (await db.select().from(schema.boards).where(eq(schema.boards.id, card.boardId))).map(b => b.availabilitySchedule)[0] : null);
+    if (!constraint.allowed) {
+      currentTime = constraint.nextStart || (currentTime + 15 * 60 * 1000);
+      // Re-align to 15 mins if needed, though nextStart should be aligned usually
+      continue;
+    }
+
     const conflict = busySlots.find(s => (currentTime < s.end && slotEnd > s.start));
     
     if (conflict) {
