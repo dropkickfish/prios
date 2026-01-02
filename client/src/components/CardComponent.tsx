@@ -1,4 +1,4 @@
-import { CardType } from '../types';
+import type { CardType } from '../types';
 
 interface CardComponentProps {
   card: CardType;
