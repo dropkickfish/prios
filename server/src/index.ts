@@ -6,7 +6,6 @@ import { eq, and, or, desc } from 'drizzle-orm';
 import dotenv from 'dotenv';
 import cors from '@fastify/cors';
 import { DAVClient } from 'tsdav';
-
 dotenv.config();
 
 // Note: We use manual fetch for OAuth code exchange since we removed googleapis
@@ -436,6 +435,20 @@ fastify.post('/api/boards/:boardId/statuses', async (request) => {
 fastify.get('/api/boards/:boardId/cards', async (request) => {
   const { boardId } = request.params as any;
   return await db.select().from(schema.cards).where(eq(schema.cards.boardId, boardId));
+});
+
+fastify.patch('/api/boards/:id', async (request, reply) => {
+  const { id } = request.params as any;
+  const updates = request.body as any;
+  const result = await db.update(schema.boards).set(updates).where(eq(schema.boards.id, id)).returning();
+  return result[0];
+});
+
+fastify.post('/api/cards', async (request, reply) => {
+  const { id } = request.params as any;
+  const card = await db.select().from(schema.cards).where(eq(schema.cards.id, id));
+  if (!card[0]) return reply.status(404).send({ error: 'Card not found' });
+  return card[0];
 });
 
 fastify.get('/api/cards/:id', async (request, reply) => {

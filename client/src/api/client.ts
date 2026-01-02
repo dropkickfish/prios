@@ -111,5 +111,17 @@ export const apiClient = {
       body: JSON.stringify({ blockingCardId, blockedCardId }),
     });
     return res.json();
+  },
+  getCardUpdates: async (cardId: string) => {
+    const res = await fetch(`${API_BASE}/cards/${cardId}/updates`);
+    return res.json();
+  },
+  addCardUpdate: async (cardId: string, content: string) => {
+    const res = await fetch(`${API_BASE}/cards/${cardId}/updates`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ content }),
+    });
+    return res.json();
   }
 };

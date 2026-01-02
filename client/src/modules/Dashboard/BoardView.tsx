@@ -101,12 +101,21 @@ export const BoardView = ({ boardId, onBack }: BoardViewProps) => {
         </div>
         <div className="flex gap-3">
           <button onClick={onBack} className="btn btn-ghost btn-sm rounded-xl px-4">Back</button>
-          <button 
-            onClick={() => setShowCreateModal(true)} 
-            className="btn btn-primary btn-sm px-6 text-white border-none shadow-lg shadow-primary/20 rounded-xl font-bold"
-          >
-            Add Card
-          </button>
+          {statuses.some(s => s.category === 'maybe') && (
+            <button 
+              disabled={!!(showCreateModal || viewerCard || schedulingCard)}
+              onClick={() => {
+                const firstMaybe = statuses.find(s => s.category === 'maybe');
+                if (firstMaybe) {
+                  setSelectedStatusId(firstMaybe.id);
+                  setShowCreateModal(true);
+                }
+              }} 
+              className="btn btn-primary btn-sm px-6 text-white border-none shadow-lg shadow-primary/20 rounded-xl font-bold"
+            >
+              Add Card
+            </button>
+          )}
         </div>
       </div>
 
@@ -131,43 +140,48 @@ export const BoardView = ({ boardId, onBack }: BoardViewProps) => {
                 <div key={card.id} className="group relative">
                   <CardComponent 
                     card={card} 
-                    onClick={() => setViewerCard(card)} 
+                    onClick={() => !(showCreateModal || viewerCard || schedulingCard) && setViewerCard(card)} 
                     onStatusChange={(newStatusId) => handleStatusChange(card.id, newStatusId)}
                   />
-                  <div className="mt-3 flex flex-wrap gap-1 opacity-0 group-hover:opacity-100 transition-all duration-300 justify-center absolute -bottom-2 left-2 right-2 translate-y-full z-20 bg-base-100/90 backdrop-blur-md p-3 rounded-2xl shadow-2xl border border-base-content/10 scale-95 group-hover:scale-100">
-                    {status.category === 'maybe' && (
-                      <button 
-                        onClick={() => handleSchedule(card)}
-                        className="btn btn-xs btn-primary btn-outline gap-1 rounded-lg font-black text-[9px] uppercase tracking-wider"
-                      >
-                        ⚡ Schedule Now
-                      </button>
-                    )}
-                    <div className="w-full h-px bg-base-content/5 my-1"></div>
-                    <div className="flex flex-wrap gap-1 justify-center">
-                      {statuses.filter(s => s.id !== status.id).map(s => (
+                  {!(showCreateModal || viewerCard || schedulingCard) && (
+                    <div className="mt-3 flex flex-wrap gap-1 opacity-0 group-hover:opacity-100 transition-all duration-300 justify-center absolute -bottom-2 left-2 right-2 translate-y-full z-20 bg-base-100/90 backdrop-blur-md p-3 rounded-2xl shadow-2xl border border-base-content/10 scale-95 group-hover:scale-100">
+                      {status.category === 'maybe' && (
                         <button 
-                          key={s.id}
-                          onClick={() => handleStatusChange(card.id, s.id)}
-                          className="btn btn-xs btn-ghost text-[9px] uppercase font-bold tracking-tight hover:bg-primary hover:text-white rounded-lg px-2"
+                          onClick={() => handleSchedule(card)}
+                          className="btn btn-xs btn-primary btn-outline gap-1 rounded-lg font-black text-[9px] uppercase tracking-wider"
                         >
-                          → {s.name}
+                          ⚡ Schedule Now
                         </button>
-                      ))}
+                      )}
+                      <div className="w-full h-px bg-base-content/5 my-1"></div>
+                      <div className="flex flex-wrap gap-1 justify-center">
+                        {statuses.filter(s => s.id !== status.id).map(s => (
+                          <button 
+                            key={s.id}
+                            onClick={() => handleStatusChange(card.id, s.id)}
+                            className="btn btn-xs btn-ghost text-[9px] uppercase font-bold tracking-tight hover:bg-primary hover:text-white rounded-lg px-2"
+                          >
+                            → {s.name}
+                          </button>
+                        ))}
+                      </div>
                     </div>
-                  </div>
+                  )}
                 </div>
               ))}
-              <button 
-                onClick={() => {
-                  setSelectedStatusId(status.id);
-                  setShowCreateModal(true);
-                }} 
-                className="btn btn-ghost btn-sm py-8 opacity-20 hover:opacity-100 border-dashed border-2 border-base-content/20 rounded-3xl group flex flex-col gap-1"
-              >
-                <span className="text-xl group-hover:scale-125 transition-transform">+</span>
-                <span className="text-[10px] uppercase font-black tracking-widest">New Card</span>
-              </button>
+              {status.category === 'maybe' && (
+                <button 
+                  disabled={!!(showCreateModal || viewerCard || schedulingCard)}
+                  onClick={() => {
+                    setSelectedStatusId(status.id);
+                    setShowCreateModal(true);
+                  }} 
+                  className="btn btn-ghost btn-sm py-8 opacity-20 hover:opacity-100 border-dashed border-2 border-base-content/20 rounded-3xl group flex flex-col gap-1 disabled:opacity-5"
+                >
+                  <span className="text-xl group-hover:scale-125 transition-transform">+</span>
+                  <span className="text-[10px] uppercase font-black tracking-widest">New Card</span>
+                </button>
+              )}
             </div>
           </div>
         ))}
@@ -183,8 +197,9 @@ export const BoardView = ({ boardId, onBack }: BoardViewProps) => {
         <CardDetailModal 
           card={viewerCard}
           statuses={statuses}
+          allCards={cards}
           onClose={() => setViewerCard(null)}
-          onUpdated={fetchData}
+          onUpdated={async () => { fetchData(); }}
           onDeleted={fetchData}
         />
       )}

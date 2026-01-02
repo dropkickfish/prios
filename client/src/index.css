@@ -1,7 +1,36 @@
 @import "tailwindcss";
+@plugin "@tailwindcss/typography";
 @plugin "daisyui" {
   themes: winter, night;
 }
 
 @source "../index.html";
 @source "./**/*.{js,ts,jsx,tsx}";
+
+/* Typography Overrides */
+.prose {
+  --tw-prose-body: var(--color-base-content);
+  --tw-prose-headings: var(--color-base-content);
+  line-height: 1.4;
+}
+
+.prose p {
+  margin-top: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.prose h1, .prose h2, .prose h3 {
+  margin-top: 1rem;
+  margin-bottom: 0.5rem;
+  font-weight: 900;
+}
+
+.prose ul, .prose ol {
+  margin-top: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.prose li {
+  margin-top: 0.25rem;
+  margin-bottom: 0.25rem;
+}

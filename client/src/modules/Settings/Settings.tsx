@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { apiClient } from '../../api/client';
+import { ThemeController } from '../../components/ThemeController';
 
 export const Settings = () => {
   const [connected, setConnected] = useState(false);
@@ -72,6 +73,22 @@ export const Settings = () => {
               Connect Calendar
             </button>
           )}
+        </div>
+      </section>
+
+      <section className="card bg-base-100 shadow-xl border border-base-200 p-8">
+        <h2 className="text-xl font-black mb-6 flex items-center gap-2">
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01" /></svg>
+          Appearance
+        </h2>
+        
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="font-bold">Application Theme</p>
+            <p className="text-sm opacity-50">Select your preferred visual style.</p>
+          </div>
+          
+          <ThemeController />
         </div>
       </section>
 

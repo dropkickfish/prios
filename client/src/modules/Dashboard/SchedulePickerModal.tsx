@@ -53,57 +53,54 @@ export const SchedulePickerModal: React.FC<SchedulePickerModalProps> = ({ card, 
   };
 
   return (
-    <div className="modal modal-open">
-      <div className="modal-box bg-slate-900 border border-slate-700 shadow-2xl max-w-md">
-        <h3 className="font-bold text-xl text-white mb-2">Schedule Task</h3>
-        <p className="text-slate-400 mb-6">"{card.title}"</p>
-
-        <div className="form-control mb-6">
-          <label className="label">
-            <span className="label-text text-slate-300">Duration (minutes)</span>
-          </label>
+    <div className="modal modal-open z-[100]">
+      <div className="modal-box bg-base-100 border border-base-content/10 shadow-2xl max-w-lg rounded-3xl p-8 max-h-[90vh] overflow-y-auto">
+        <h3 className="text-2xl font-black text-primary mb-2">Schedule Task</h3>
+        <p className="text-xs uppercase font-black tracking-widest opacity-40 mb-8 leading-tight">"{card.title}"</p>
+        <div className="space-y-2 mb-8">
+          <label className="block text-[10px] font-black uppercase tracking-widest text-base-content/70">Duration (Minutes)</label>
           <input 
             type="number" 
-            className="input input-bordered bg-slate-800 text-white border-slate-700" 
+            className="input w-full bg-base-content/5 border border-base-content/10 focus:border-primary/50 focus:bg-base-content/10 rounded-2xl h-14 text-xl font-black px-6 transition-all"
             value={duration}
             onChange={(e) => setDuration(parseInt(e.target.value) || 30)}
           />
-          <label className="label">
-             <span className="label-text-alt text-slate-500">Based on difficulty: {card.difficulty}</span>
-          </label>
+          <div className="text-[10px] uppercase font-black tracking-widest opacity-30 mt-1">Based on difficulty: {card.difficulty}</div>
         </div>
 
-        <div className="space-y-3">
-          <span className="text-sm font-semibold text-slate-500 uppercase tracking-wider">Suggested Slots</span>
+        <div className="space-y-4">
+          <span className="label-text font-black uppercase tracking-widest opacity-40 text-[10px] block mb-2">Suggested Slots</span>
           
-          {loading ? (
-            <div className="flex justify-center p-8">
-              <span className="loading loading-spinner loading-lg text-primary"></span>
-            </div>
-          ) : suggestions.length === 0 ? (
-            <p className="text-center p-4 text-slate-500 italic">No free slots found in the next 48 hours.</p>
-          ) : (
-            suggestions.map((slot, i) => (
-              <button
-                key={i}
-                disabled={scheduling}
-                onClick={() => handleSchedule(slot.startTime)}
-                className="w-full flex items-center justify-between p-4 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-xl transition-all group"
-              >
-                <div className="text-left">
-                  <div className="font-bold text-white group-hover:text-primary transition-colors">{slot.label}</div>
-                  <div className="text-xs text-slate-500">Duration: {duration} mins</div>
-                </div>
-                <div className="badge badge-primary badge-outline opacity-0 group-hover:opacity-100 transition-opacity">
-                  Select
-                </div>
-              </button>
-            ))
-          )}
+          <div className="space-y-2 max-h-[300px] overflow-y-auto pr-2 scrollbar-thin">
+            {loading ? (
+              <div className="flex justify-center p-8">
+                <span className="loading loading-spinner loading-lg text-primary"></span>
+              </div>
+            ) : suggestions.length === 0 ? (
+              <p className="text-center p-6 bg-base-200/30 rounded-2xl text-[10px] opacity-40 italic">No free slots found in the next 48 hours.</p>
+            ) : (
+              suggestions.map((slot, i) => (
+                <button
+                  key={i}
+                  disabled={scheduling}
+                  onClick={() => handleSchedule(slot.startTime)}
+                  className="w-full flex items-center justify-between p-5 bg-base-200/30 hover:bg-primary/5 border border-base-content/5 hover:border-primary/20 rounded-2xl transition-all group"
+                >
+                  <div className="text-left">
+                    <div className="font-black text-base-content group-hover:text-primary transition-colors">{slot.label}</div>
+                    <div className="text-[10px] uppercase font-black tracking-widest opacity-30 mt-1">Duration: {duration} mins</div>
+                  </div>
+                  <div className="badge badge-primary badge-sm font-black uppercase tracking-widest opacity-0 group-hover:opacity-100 transition-opacity">
+                    Pick
+                  </div>
+                </button>
+              ))
+            )}
+          </div>
         </div>
 
-        <div className="modal-action mt-8">
-          <button className="btn btn-ghost text-slate-400" onClick={onClose} disabled={scheduling}>Cancel</button>
+        <div className="modal-action mt-10">
+          <button className="btn btn-ghost text-base-content/50 hover:text-base-content hover:bg-base-content/10 rounded-2xl" onClick={onClose} disabled={scheduling}>Cancel</button>
         </div>
       </div>
     </div>

@@ -8,7 +8,7 @@ interface LayoutProps {
 
 export const Layout = ({ children, currentView, onNavigate }: LayoutProps) => {
   return (
-    <div className="min-h-screen bg-base-200" data-theme="winter">
+    <div className="min-h-screen bg-base-200">
       <div className="navbar bg-base-100 shadow-sm px-4">
         <div className="flex-1">
           <a onClick={() => onNavigate?.('dashboard')} className="btn btn-ghost text-xl font-bold gap-2 cursor-pointer">

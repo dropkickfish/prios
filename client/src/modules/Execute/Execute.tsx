@@ -37,7 +37,7 @@ export const Execute = ({ boardId, onBack }: ExecuteProps) => {
     const doneStatus = statuses.find((s: any) => s.category === 'done');
     
     if (doneStatus) {
-      await apiClient.updateCardStatus(activeCard.id, doneStatus.id);
+      await apiClient.updateCard(activeCard.id, { statusId: doneStatus.id });
       setActiveCard(null);
     }
   };
@@ -78,9 +78,8 @@ export const Execute = ({ boardId, onBack }: ExecuteProps) => {
       </h1>
       
       {activeCard.description && (
-        <div className="text-xl opacity-70 mb-12 leading-relaxed">
-          {/* Slate JSON rendering would go here, for now just title/plain description */}
-          {typeof activeCard.description === 'string' ? activeCard.description : 'Focus on the task at hand.'}
+        <div className="prose prose-xl dark:prose-invert mb-12 mx-auto text-left opacity-80">
+          <div dangerouslySetInnerHTML={{ __html: activeCard.description }} />
         </div>
       )}
 

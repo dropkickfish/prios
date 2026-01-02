@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
 import { apiClient } from '../../api/client';
 import type { BoardType } from '../../types';
+import { CreateBoardModal } from './CreateBoardModal';
+import { BoardSettingsModal } from './BoardSettingsModal';
 
 export { BoardView } from './BoardView';
 
@@ -13,6 +15,8 @@ interface DashboardProps {
 export const Dashboard = ({ onOpenExecute, onOpenBoard, onOpenPrioritise }: DashboardProps) => {
   const [boards, setBoards] = useState<BoardType[]>([]);
   const [loading, setLoading] = useState(true);
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [editingBoard, setEditingBoard] = useState<BoardType | null>(null);
 
   useEffect(() => {
     apiClient.getBoards().then(data => {
@@ -21,14 +25,11 @@ export const Dashboard = ({ onOpenExecute, onOpenBoard, onOpenPrioritise }: Dash
     });
   }, []);
 
-  const handleCreateBoard = async () => {
-    const name = prompt('Enter board name:');
-    if (!name) return;
-    const newBoard = await apiClient.createBoard({ 
-      name, 
-      availabilitySchedule: { mon: ["09:00-17:00"] } 
-    });
-    setBoards([...boards, newBoard]);
+  const fetchBoards = async () => {
+    setLoading(true);
+    const data = await apiClient.getBoards();
+    setBoards(data);
+    setLoading(false);
   };
 
   return (
@@ -38,7 +39,7 @@ export const Dashboard = ({ onOpenExecute, onOpenBoard, onOpenPrioritise }: Dash
           <h1 className="text-4xl font-black text-primary">Dashboard</h1>
           <p className="opacity-60 text-base-content">Manage your boards and track your progress.</p>
         </div>
-        <button onClick={handleCreateBoard} className="btn btn-primary shadow-lg shadow-primary/20 text-white border-none">Create New Board</button>
+        <button onClick={() => setShowCreateModal(true)} className="btn btn-primary shadow-lg shadow-primary/20 text-white border-none">Create New Board</button>
       </div>
 
       {loading ? (
@@ -52,6 +53,13 @@ export const Dashboard = ({ onOpenExecute, onOpenBoard, onOpenPrioritise }: Dash
               <div className="card-body">
                 <div className="flex justify-between items-start">
                   <h2 className="card-title text-2xl font-black">{board.name}</h2>
+                  <button 
+                    onClick={() => setEditingBoard(board)}
+                    className="btn btn-circle btn-xs btn-ghost opacity-20 hover:opacity-100"
+                    title="Board Settings"
+                  >
+                    ⚙️
+                  </button>
                 </div>
                 <p className="opacity-70 text-sm">Productivity hub for {board.name}.</p>
                 <div className="card-actions justify-end mt-6 gap-3">
@@ -65,10 +73,25 @@ export const Dashboard = ({ onOpenExecute, onOpenBoard, onOpenPrioritise }: Dash
           {boards.length === 0 && (
             <div className="col-span-full text-center p-20 bg-base-100 rounded-3xl border-2 border-dashed border-base-300">
                <p className="text-xl opacity-40 font-bold uppercase tracking-widest">No boards found</p>
-               <button onClick={handleCreateBoard} className="btn btn-ghost btn-sm mt-4">Create your first board</button>
+               <button onClick={() => setShowCreateModal(true)} className="btn btn-ghost btn-sm mt-4">Create your first board</button>
             </div>
           )}
         </div>
+      )}
+
+      {showCreateModal && (
+        <CreateBoardModal 
+          onClose={() => setShowCreateModal(false)}
+          onCreated={(newBoard) => setBoards([...boards, newBoard])}
+        />
+      )}
+
+      {editingBoard && (
+        <BoardSettingsModal 
+          board={editingBoard}
+          onClose={() => setEditingBoard(null)}
+          onUpdated={fetchBoards}
+        />
       )}
     </div>
   );

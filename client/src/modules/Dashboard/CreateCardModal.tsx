@@ -2,6 +2,7 @@ import { useState } from 'react';
 import type { StatusType, CardType } from '../../types';
 import { apiClient } from '../../api/client';
 import { EisenhowerMatrixHelper } from './EisenhowerMatrixHelper';
+import { TipTapEditor } from '../../components/TipTapEditor';
 
 interface CreateCardModalProps {
   boardId: string;
@@ -15,7 +16,7 @@ interface CreateCardModalProps {
 export const CreateCardModal = ({ boardId, statuses, existingCards, initialStatusId, onClose, onCreated }: CreateCardModalProps) => {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
-  const [statusId, setStatusId] = useState(initialStatusId || statuses[0]?.id || '');
+  const [statusId] = useState(initialStatusId || statuses[0]?.id || '');
   const [difficulty, setDifficulty] = useState(3);
   const [priority, setPriority] = useState(3);
   const [selectedDependencies, setSelectedDependencies] = useState<string[]>([]);
@@ -55,7 +56,7 @@ export const CreateCardModal = ({ boardId, statuses, existingCards, initialStatu
 
   return (
     <div className="modal modal-open bg-base-300/60 backdrop-blur-sm">
-      <div className="modal-box max-w-lg border border-base-content/10 shadow-2xl rounded-3xl p-8">
+      <div className="modal-box max-w-4xl w-full lg:w-[80%] border border-base-content/10 shadow-2xl rounded-3xl p-8">
         <h3 className="text-3xl font-black mb-8 text-primary">New Task</h3>
 
         {error && (
@@ -65,14 +66,12 @@ export const CreateCardModal = ({ boardId, statuses, existingCards, initialStatu
         )}
 
         <form onSubmit={handleSubmit} className="space-y-6">
-          <div className="form-control">
-            <label className="label">
-              <span className="label-text font-black uppercase tracking-widest opacity-40 text-[10px]">Task Title</span>
-            </label>
+          <div className="space-y-2 mb-6">
+            <label className="block text-[10px] font-black uppercase tracking-widest text-base-content/70">Task Title</label>
             <input 
               type="text" 
               placeholder="What needs doing?" 
-              className="input input-bordered focus:input-primary rounded-2xl h-14 text-lg font-bold"
+              className="input w-full bg-base-content/5 border border-base-content/10 focus:border-primary/50 focus:bg-base-content/10 rounded-2xl h-12 text-base font-bold px-4 transition-all placeholder:text-base-content/30"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               required
@@ -80,64 +79,48 @@ export const CreateCardModal = ({ boardId, statuses, existingCards, initialStatu
             />
           </div>
 
-          <div className="form-control">
-            <label className="label">
-              <span className="label-text font-black uppercase tracking-widest opacity-40 text-[10px]">Description</span>
+          <div className="flex flex-col gap-2">
+            <label className="label p-0">
+              <span className="label-text font-black uppercase tracking-widest opacity-40 text-[10px]">Description & Context</span>
             </label>
-            <textarea 
-              className="textarea textarea-bordered focus:textarea-primary rounded-2xl h-24 text-base"
+            <TipTapEditor 
+              content={description} 
+              onChange={setDescription} 
               placeholder="Add some context..."
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            <div className="form-control">
-              <label className="label">
-                <span className="label-text font-black uppercase tracking-widest opacity-40 text-[10px]">Status</span>
-              </label>
-              <select 
-                className="select select-bordered rounded-2xl"
-                value={statusId}
-                onChange={(e) => setStatusId(e.target.value)}
-              >
-                {statuses.map(s => (
-                  <option key={s.id} value={s.id}>{s.name}</option>
-                ))}
-              </select>
-            </div>
-
-            <div className="form-control">
-               {/* Spacer for layout */}
-            </div>
+          <div className="hidden">
+             {/* Status is hidden, defaults to Maybe column via initialStatusId */}
           </div>
 
-          <div className="form-control">
-            <label className="label">
+          <div className="flex flex-col gap-2">
+            <label className="label p-0">
               <span className="label-text font-black uppercase tracking-widest opacity-40 text-[10px]">Depends On (Blocking Tasks)</span>
             </label>
-            <div className="flex flex-wrap gap-2 max-h-32 overflow-y-auto p-2 bg-base-200/50 rounded-2xl border border-base-content/5">
+            <div className="flex flex-wrap gap-2 max-h-32 overflow-y-auto p-2 bg-base-200/50 rounded-2xl border border-base-content/10">
               {existingCards.length === 0 && <p className="text-[10px] opacity-30 p-2 italic">No other tasks to depend on yet.</p>}
               {existingCards.map(card => (
-                <label key={card.id} className="label cursor-pointer flex gap-3 p-2 bg-base-100 rounded-xl border border-base-content/5 hover:border-primary/30 transition-colors">
+                <label key={card.id} className="label cursor-pointer flex gap-3 p-2 bg-base-100 rounded-xl border border-base-content/5 hover:border-primary/20 transition-colors">
                   <input 
                     type="checkbox" 
-                    className="checkbox checkbox-xs checkbox-primary rounded-md" 
+                    className="checkbox checkbox-xs checkbox-primary rounded-md border-base-content/20" 
                     checked={selectedDependencies.includes(card.id)}
                     onChange={(e) => {
                       if (e.target.checked) setSelectedDependencies([...selectedDependencies, card.id]);
                       else setSelectedDependencies(selectedDependencies.filter(id => id !== card.id));
                     }}
                   />
-                  <span className="text-[10px] font-bold truncate max-w-[120px]">{card.title}</span>
+                  <span className="text-[10px] font-bold truncate max-w-[120px] opacity-70">{card.title}</span>
                 </label>
               ))}
             </div>
           </div>
 
-          <div className="bg-primary/5 p-6 rounded-3xl border border-primary/10 relative group/eval">
-            <div className="absolute -top-3 left-4 px-2 bg-base-100 text-[10px] font-black uppercase tracking-widest text-primary">Priority & Sizing</div>
+          <div className="bg-primary/5 p-6 rounded-3xl border border-primary/10 relative group/eval mt-4">
+            <div className="label pt-0 pb-4">
+              <span className="label-text font-black uppercase tracking-widest opacity-40 text-[10px]">Priority & Sizing</span>
+            </div>
             
             <button 
               type="button"
@@ -148,11 +131,11 @@ export const CreateCardModal = ({ boardId, statuses, existingCards, initialStatu
               ✨
             </button>
 
-            <div className="grid grid-cols-2 gap-8">
-              <div className="form-control">
-                <label className="label">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+              <div className="flex flex-col gap-2">
+                <label className="label p-0">
                   <span className="label-text font-black uppercase tracking-widest opacity-40 text-[10px]">Difficulty (1-5)</span>
-                  <span className="badge badge-outline font-black">{difficulty}</span>
+                  <span className="badge badge-primary badge-outline font-black">{difficulty}</span>
                 </label>
                 <input 
                   type="range" min="1" max="5" 
@@ -162,10 +145,10 @@ export const CreateCardModal = ({ boardId, statuses, existingCards, initialStatu
                 />
               </div>
 
-              <div className="form-control">
-                <label className="label">
+              <div className="flex flex-col gap-2">
+                <label className="label p-0">
                   <span className="label-text font-black uppercase tracking-widest opacity-40 text-[10px]">Priority (1-4)</span>
-                  <span className="badge badge-outline font-black">{priority}</span>
+                  <span className="badge badge-secondary badge-outline font-black">{priority}</span>
                 </label>
                 <input 
                   type="range" min="1" max="4" 
@@ -178,7 +161,7 @@ export const CreateCardModal = ({ boardId, statuses, existingCards, initialStatu
           </div>
 
           <div className="modal-action mt-10">
-            <button type="button" onClick={onClose} className="btn btn-ghost rounded-2xl">Cancel</button>
+            <button type="button" onClick={onClose} className="btn btn-ghost rounded-2xl text-base-content/50 hover:text-base-content hover:bg-base-content/10">Cancel</button>
             <button 
               type="submit" 
               className={`btn btn-primary px-8 rounded-2xl shadow-lg shadow-primary/30 border-none text-white ${loading ? 'loading' : ''}`}
@@ -188,16 +171,19 @@ export const CreateCardModal = ({ boardId, statuses, existingCards, initialStatu
             </button>
           </div>
         </form>
-      {showEisenhower && (
-        <EisenhowerMatrixHelper 
-          onComplete={(res) => {
-            setPriority(res.priority);
-            setDifficulty(res.difficulty);
-            setShowEisenhower(false);
-          }}
-          onCancel={() => setShowEisenhower(false)}
-        />
-      )}
+
+        {showEisenhower && (
+          <div className="absolute inset-0 z-50">
+            <EisenhowerMatrixHelper 
+              onComplete={(res) => {
+                setPriority(res.priority);
+                setDifficulty(res.difficulty);
+                setShowEisenhower(false);
+              }}
+              onCancel={() => setShowEisenhower(false)}
+            />
+          </div>
+        )}
       </div>
     </div>
   );
