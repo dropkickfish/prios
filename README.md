@@ -42,6 +42,8 @@ cd server
 npm install
 # Create the local database and push the schema
 npm run db:push
+# Seed the database with essential data
+npm run db:seed
 # Start the dev server (defaults to port 3000)
 npm run dev
 ```

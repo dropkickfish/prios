@@ -115,16 +115,65 @@ fastify.delete('/api/auth/google', async () => {
   return { success: true };
 });
 
+async function refreshGoogleToken() {
+  const settings = await db.select().from(schema.appSettings).where(eq(schema.appSettings.id, 'singleton'));
+  if (!settings[0]?.googleRefreshToken) return null;
+
+  const { googleRefreshToken, googleTokenExpiry } = settings[0];
+  
+  // If token is still valid for more than 5 minutes, return existing token
+  if (googleTokenExpiry && googleTokenExpiry > Date.now() + 5 * 60 * 1000) {
+    return settings[0].googleAccessToken;
+  }
+
+  fastify.log.info('Refreshing Google OAuth token...');
+
+  try {
+    const response = await fetch(`${GOOGLE_AUTH_ENDPOINT}/token`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        client_id: process.env.GOOGLE_CLIENT_ID!,
+        client_secret: process.env.GOOGLE_CLIENT_SECRET!,
+        refresh_token: googleRefreshToken,
+        grant_type: 'refresh_token',
+      }),
+    });
+
+    const data = await response.json();
+
+    if (data.error) {
+      fastify.log.error({ error: data.error, description: data.error_description }, 'Failed to refresh Google token');
+      return null;
+    }
+
+    const newAccessToken = data.access_token;
+    const newExpiry = Date.now() + (data.expires_in * 1000);
+
+    await db.update(schema.appSettings).set({
+      googleAccessToken: newAccessToken,
+      googleTokenExpiry: newExpiry,
+    }).where(eq(schema.appSettings.id, 'singleton'));
+
+    fastify.log.info('Google OAuth token refreshed successfully');
+    return newAccessToken;
+  } catch (error) {
+    fastify.log.error(error, 'Error during Google token refresh');
+    return null;
+  }
+}
+
 // CalDAV Helper
 async function getCalendarEvents(startTime: Date, endTime: Date) {
+  const accessToken = await refreshGoogleToken();
   const settings = await db.select().from(schema.appSettings).where(eq(schema.appSettings.id, 'singleton'));
-  if (!settings[0] || !settings[0].googleRefreshToken) {
-    fastify.log.warn('No Google settings found in DB');
+  
+  if (!accessToken || !settings[0]) {
+    fastify.log.warn('No valid Google access token or settings found');
     return [];
   }
 
   let email = settings[0].googleCalendarId;
-  let accessToken = settings[0].googleAccessToken!;
 
   // If we don't have the email/ID, fetch it from REST API
   if (!email) {
@@ -194,13 +243,17 @@ async function getCalendarEvents(startTime: Date, endTime: Date) {
 }
 
 async function createCalendarEvent(title: string, startTime: Date, durationMinutes: number) {
+  const accessToken = await refreshGoogleToken();
   const settings = await db.select().from(schema.appSettings).where(eq(schema.appSettings.id, 'singleton'));
-  if (!settings[0]?.googleRefreshToken) return;
+  
+  if (!accessToken || !settings[0]) {
+    fastify.log.warn('No valid Google access token or settings found for createCalendarEvent');
+    return;
+  }
 
   const email = (settings[0].googleCalendarId && settings[0].googleCalendarId !== 'primary') 
     ? settings[0].googleCalendarId 
     : 'primary';
-  const accessToken = settings[0].googleAccessToken!;
   const endTime = new Date(startTime.getTime() + durationMinutes * 60000);
 
   const serverUrl = email !== 'primary'
