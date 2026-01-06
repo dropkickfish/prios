@@ -135,9 +135,22 @@ export const BoardView = () => {
     // Ensure we refresh the board data to get latest colour/schedule
     // Since getBoards() returns all boards, we find ours
     const currentBoard = boards.find((b: any) => b.id === boardId);
+    
+    if (!currentBoard) {
+      navigate('/');
+      return; 
+    }
+
     setBoard(currentBoard || null);
     setStatuses(boardStatuses);
     setCards(boardCards);
+    
+    // Refresh viewer card if open
+    if (viewerCard) {
+      const updatedViewerCard = boardCards.find((c: CardType) => c.id === viewerCard.id);
+      if (updatedViewerCard) setViewerCard(updatedViewerCard);
+    }
+
     setLoading(false);
 
     // Non-blocking sync
@@ -207,13 +220,19 @@ export const BoardView = () => {
   };
 
   const getCardsByStatus = (statusId: string) => {
-    return cards.filter(card => {
+    const status = statuses.find(s => s.id === statusId);
+    const filtered = cards.filter(card => {
        const matchesStatus = card.statusId === statusId;
        const matchesFilter = filterText === '' || 
          card.title.toLowerCase().includes(filterText.toLowerCase()) ||
          (typeof card.description === 'string' && card.description.toLowerCase().includes(filterText.toLowerCase()));
        return matchesStatus && matchesFilter;
     });
+
+    if (status?.category === 'maybe') {
+      return [...filtered].sort((a, b) => (b.smartScore || 0) - (a.smartScore || 0));
+    }
+    return filtered;
   };
 
   const toggleColumn = (category: string) => {
@@ -387,7 +406,7 @@ export const BoardView = () => {
                         statuses={statuses}
                         showActions={true}
                         onClick={() => !(showCreateModal || viewerCard || schedulingCard) && setViewerCard(card)} 
-                        onStatusChange={(newStatusId) => handleStatusChange(card.id, newStatusId)}
+                        onStatusChange={(_, newStatusId) => handleStatusChange(card.id, newStatusId)}
                         onSchedule={handleSchedule}
                       />
                     </DraggableCard>

@@ -2,7 +2,7 @@ import Fastify from 'fastify';
 import { drizzle } from 'drizzle-orm/better-sqlite3';
 import Database from 'better-sqlite3';
 import * as schema from './schema.js';
-import { eq, and, or, desc, isNotNull } from 'drizzle-orm';
+import { eq, and, or, desc, isNotNull, inArray } from 'drizzle-orm';
 import dotenv from 'dotenv';
 import cors from '@fastify/cors';
 import { DAVClient } from 'tsdav';
@@ -517,6 +517,8 @@ async function getOrCreateTodayStats() {
     abandonedCount: 0,
     difficultySum: 0,
     prioritySum: 0,
+    skippedCount: 0,
+    isDayOff: false,
   }).returning();
   return result[0];
 }
@@ -540,7 +542,7 @@ fastify.post('/api/boards', async (request) => {
     availabilitySchedule,
     colour: finalColour,
     order: maxOrder + 1,
-    schedulingWindowDays: request.body.schedulingWindowDays || 3,
+    schedulingWindowDays: (request.body as any).schedulingWindowDays || 3,
   }).returning();
   
   const board = result[0];
@@ -557,11 +559,21 @@ fastify.post('/api/boards', async (request) => {
   return board;
 });
 
-fastify.delete('/api/boards/:id', async (request) => {
+fastify.delete('/api/cards/:id', async (request, reply) => {
   const { id } = request.params as any;
-  // Note: For a production app, we'd handle cascading deletes or prevent deletion if cards exist.
-  // For MVP, we'll just delete the board.
-  await db.delete(schema.boards).where(eq(schema.boards.id, id));
+  
+  // Track abandonment stats before deleting
+  try {
+    const stats = await getOrCreateTodayStats();
+    await db.update(schema.userStats)
+      .set({ abandonedCount: (stats.abandonedCount || 0) + 1 })
+      .where(eq(schema.userStats.date, stats.date));
+  } catch (err) {
+    request.log.error(err, 'Failed to update abandoned stats');
+  }
+
+  await db.delete(schema.cards).where(eq(schema.cards.id, id));
+  await db.delete(schema.cardTags).where(eq(schema.cardTags.cardId, id)); // Clean up tags
   return { success: true };
 });
 
@@ -600,7 +612,33 @@ fastify.post('/api/boards/:boardId/statuses', async (request) => {
 // Cards
 fastify.get('/api/boards/:boardId/cards', async (request) => {
   const { boardId } = request.params as any;
-  return await db.select().from(schema.cards).where(eq(schema.cards.boardId, boardId));
+  const cards = await db.select().from(schema.cards).where(eq(schema.cards.boardId, boardId));
+  
+  // Fetch tags for these cards
+  const allCardIds = cards.map(c => c.id);
+  let tagsMap = new Map();
+  
+  if (allCardIds.length > 0) {
+    const cardTagsJoined = await db.select({
+      cardId: schema.cardTags.cardId,
+      tag: schema.tags
+    })
+    .from(schema.cardTags)
+    .innerJoin(schema.tags, eq(schema.cardTags.tagId, schema.tags.id))
+    .where(or(...allCardIds.map(id => eq(schema.cardTags.cardId, id))));
+
+    cardTagsJoined.forEach(ct => {
+      if (!tagsMap.has(ct.cardId)) tagsMap.set(ct.cardId, []);
+      tagsMap.get(ct.cardId).push(ct.tag);
+    });
+  }
+
+  return cards.map(c => ({
+    ...c,
+    // Smart Score V2: (Priority / Difficulty) - (0.5 * DeferredCount)
+    smartScore: parseFloat(((c.priority / c.difficulty) - (0.5 * (c.deferredCount || 0))).toFixed(2)),
+    tags: tagsMap.get(c.id) || []
+  }));
 });
 
 fastify.patch('/api/boards/:id', async (request, reply) => {
@@ -711,7 +749,6 @@ fastify.patch('/api/cards/:id', async (request, reply) => {
       }
     }
 
-    // Stats Logic: If moving to DONE, increment count
     if (targetStatus[0].category === 'done') {
       const stats = await getOrCreateTodayStats();
       await db.update(schema.userStats)
@@ -722,6 +759,22 @@ fastify.patch('/api/cards/:id', async (request, reply) => {
         })
         .where(eq(schema.userStats.date, stats.date));
     }
+  }
+
+  // Logic for Skips (deferredCount increase)
+  if (updates.deferredCount) {
+     const card = await db.select().from(schema.cards).where(eq(schema.cards.id, id));
+     if (card[0] && updates.deferredCount > card[0].deferredCount) {
+        // This is a skip
+        const stats = await getOrCreateTodayStats();
+        await db.update(schema.userStats)
+          .set({ skippedCount: (stats.skippedCount || 0) + 1 })
+          .where(eq(schema.userStats.date, stats.date));
+     }
+  }
+
+  if (updates.statusId) {
+    updates.statusChangedAt = new Date();
   }
 
   const result = await db.update(schema.cards).set(updates).where(eq(schema.cards.id, id)).returning();
@@ -920,9 +973,44 @@ fastify.post('/api/cards/:id/schedule', async (request, reply) => {
   return { success: true, scheduledAt: finalScheduledAt };
 });
 
-fastify.delete('/api/cards/:id', async (request) => {
+fastify.delete('/api/boards/:id', async (request) => {
   const { id } = request.params as any;
-  await db.delete(schema.cards).where(eq(schema.cards.id, id));
+  
+  // 1. Get all card IDs for this board to clean up relations
+  const boardCards = await db.select().from(schema.cards).where(eq(schema.cards.boardId, id));
+  const cardIds = boardCards.map(c => c.id);
+
+  if (cardIds.length > 0) {
+    // 2. Delete dependencies (both blocking and blocked)
+    await db.delete(schema.dependencies).where(
+      or(
+        inArray(schema.dependencies.blockingCardId, cardIds),
+        inArray(schema.dependencies.blockedCardId, cardIds)
+      )
+    );
+
+    // 3. Delete cardTags
+    await db.delete(schema.cardTags).where(inArray(schema.cardTags.cardId, cardIds));
+
+    // 4. Delete cardUpdates
+    await db.delete(schema.cardUpdates).where(inArray(schema.cardUpdates.cardId, cardIds));
+    
+    // 5. Delete cardMedia
+    await db.delete(schema.cardMedia).where(inArray(schema.cardMedia.cardId, cardIds));
+
+    // 6. Delete cards
+    await db.delete(schema.cards).where(eq(schema.cards.boardId, id));
+  }
+  
+  // 7. Delete statuses
+  await db.delete(schema.statuses).where(eq(schema.statuses.boardId, id));
+
+  // 8. Delete tags (board scoped)
+  await db.delete(schema.tags).where(eq(schema.tags.boardId, id));
+
+  // 9. Delete board
+  await db.delete(schema.boards).where(eq(schema.boards.id, id));
+  
   return { success: true };
 });
 
@@ -960,6 +1048,69 @@ fastify.post('/api/dependencies', async (request) => {
 fastify.delete('/api/dependencies/:id', async (request) => {
   const { id } = request.params as any;
   await db.delete(schema.dependencies).where(eq(schema.dependencies.id, id));
+  return { success: true };
+});
+
+// Tags
+fastify.get('/api/tags', async (request) => {
+  const { boardId } = request.query as any;
+  if (boardId) {
+    return await db.select().from(schema.tags).where(eq(schema.tags.boardId, boardId));
+  }
+  return await db.select().from(schema.tags);
+});
+
+fastify.post('/api/tags', async (request) => {
+  const { name, colour, boardId } = request.body as any;
+  if (!boardId) throw new Error('boardId is required');
+  
+  const lowerName = name.toLowerCase().trim();
+  
+  // Check for existing tag in this board
+  const existing = await db.select().from(schema.tags).where(
+    and(eq(schema.tags.boardId, boardId), eq(schema.tags.name, lowerName))
+  );
+  
+  if (existing[0]) return existing[0];
+
+  const result = await db.insert(schema.tags).values({ 
+    boardId, 
+    name: lowerName, 
+    colour: colour || 'primary' 
+  }).returning();
+  return result[0];
+});
+
+fastify.get('/api/cards/:cardId/tags', async (request) => {
+  const { cardId } = request.params as any;
+  return await db.select({
+    tag: schema.tags
+  })
+  .from(schema.cardTags)
+  .innerJoin(schema.tags, eq(schema.cardTags.tagId, schema.tags.id))
+  .where(eq(schema.cardTags.cardId, cardId));
+});
+
+fastify.post('/api/cards/:cardId/tags', async (request) => {
+  const { cardId } = request.params as any;
+  const { tagId } = request.body as any;
+  
+  // Check if association already exists
+  const existing = await db.select().from(schema.cardTags).where(
+    and(eq(schema.cardTags.cardId, cardId), eq(schema.cardTags.tagId, tagId))
+  );
+  
+  if (existing[0]) return existing[0];
+
+  const result = await db.insert(schema.cardTags).values({ cardId, tagId }).returning();
+  return result[0];
+});
+
+fastify.delete('/api/cards/:cardId/tags/:tagId', async (request) => {
+  const { cardId, tagId } = request.params as any;
+  await db.delete(schema.cardTags).where(
+    and(eq(schema.cardTags.cardId, cardId), eq(schema.cardTags.tagId, tagId))
+  );
   return { success: true };
 });
 

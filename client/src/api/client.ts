@@ -122,6 +122,16 @@ export const apiClient = {
     });
     return res.json();
   },
+  getCardDependencies: async (cardId: string) => {
+    const res = await fetch(`${API_BASE}/cards/${cardId}/dependencies`);
+    return res.json();
+  },
+  deleteDependency: async (dependencyId: string) => {
+    const res = await fetch(`${API_BASE}/dependencies/${dependencyId}`, {
+      method: 'DELETE'
+    });
+    return res.json();
+  },
   getCardUpdates: async (cardId: string) => {
     const res = await fetch(`${API_BASE}/cards/${cardId}/updates`);
     return res.json();
@@ -136,6 +146,34 @@ export const apiClient = {
   },
   syncCalendar: async () => {
     const res = await fetch(`${API_BASE}/calendar/sync`, { method: 'POST' });
+    return res.json();
+  },
+  getTags: async (boardId?: string): Promise<any[]> => {
+    const url = new URL(`${API_BASE}/tags`);
+    if (boardId) url.searchParams.append('boardId', boardId);
+    const res = await fetch(url.toString());
+    return res.json();
+  },
+  createTag: async (data: { name: string; boardId: string; colour?: string }) => {
+    const res = await fetch(`${API_BASE}/tags`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+    return res.json();
+  },
+  addCardTag: async (cardId: string, tagId: string) => {
+    const res = await fetch(`${API_BASE}/cards/${cardId}/tags`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tagId }),
+    });
+    return res.json();
+  },
+  deleteCardTag: async (cardId: string, tagId: string) => {
+    const res = await fetch(`${API_BASE}/cards/${cardId}/tags/${tagId}`, {
+      method: 'DELETE',
+    });
     return res.json();
   }
 };

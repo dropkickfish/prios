@@ -15,6 +15,12 @@ export interface StatusType {
   category: 'maybe' | 'scheduled' | 'doing' | 'done' | 'wontdo';
 }
 
+export interface TagType {
+  id: string;
+  name: string;
+  colour?: string;
+}
+
 export interface CardType {
   id: string;
   boardId: string;
@@ -24,6 +30,9 @@ export interface CardType {
   difficulty: number;
   priority: number;
   scheduledAt?: Date;
+  deferredCount: number;
+  smartScore?: number;
+  tags?: TagType[];
 }
 
 export interface CardUpdateType {

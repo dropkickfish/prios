@@ -265,6 +265,10 @@ export const Dashboard = () => {
           board={editingBoard}
           onClose={() => setEditingBoard(null)}
           onUpdated={fetchBoards}
+          onDeleted={() => {
+            setEditingBoard(null);
+            fetchBoards();
+          }}
         />
       )}
     </div>

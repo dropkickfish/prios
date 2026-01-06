@@ -30,7 +30,7 @@ export const CardComponent = ({ card, statuses, onStatusChange, onClick, onSched
         </div>
         
         {/* Metadata */}
-        <div className="flex flex-wrap gap-2 text-[10px] uppercase font-bold tracking-wider opacity-60">
+        <div className="flex flex-wrap items-center gap-2 text-[10px] uppercase font-bold tracking-wider opacity-60">
           <span className={`${getDifficultyColor(card.difficulty)}`}>
             Diff: {card.difficulty}
           </span>
@@ -38,7 +38,30 @@ export const CardComponent = ({ card, statuses, onStatusChange, onClick, onSched
           <span>
             Prio: {card.priority}
           </span>
+          {card.smartScore !== undefined && (
+            <>
+              <span>•</span>
+              <span className="text-secondary">
+                Value: {card.smartScore}
+              </span>
+            </>
+          )}
         </div>
+
+        {/* Tags */}
+        {card.tags && card.tags.length > 0 && (
+          <div className="flex flex-wrap gap-1">
+            {card.tags.map(tag => (
+              <span 
+                key={tag.id} 
+                className="text-[8px] font-black uppercase px-2 py-0.5 rounded-full bg-base-content/5 text-base-content/60 border border-base-content/10 group-hover/card:bg-primary/10 group-hover/card:text-primary group-hover/card:border-primary/20 transition-colors"
+                title={`#${tag.name}`}
+              >
+                #{tag.name}
+              </span>
+            ))}
+          </div>
+        )}
 
         {card.scheduledAt && (
           <div className="flex items-center gap-1 text-[10px] opacity-40 uppercase font-black bg-base-200/50 py-1 px-2 rounded-md self-start">
