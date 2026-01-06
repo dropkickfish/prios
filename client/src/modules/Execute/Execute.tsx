@@ -42,6 +42,18 @@ export const Execute = ({ boardId, onBack }: ExecuteProps) => {
     }
   };
 
+  const handleBlocked = async () => {
+    if (!activeCard) return;
+
+    const statuses = await apiClient.getStatuses(boardId);
+    const maybeStatus = statuses.find((s: any) => s.category === 'maybe');
+
+    if (maybeStatus) {
+      await apiClient.updateCard(activeCard.id, { statusId: maybeStatus.id });
+      setActiveCard(null);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex justify-center p-20">
@@ -92,7 +104,12 @@ export const Execute = ({ boardId, onBack }: ExecuteProps) => {
       </button>
 
       <div className="mt-12 flex flex-wrap justify-center gap-6">
-        <button className="btn btn-ghost btn-sm text-error opacity-50 hover:opacity-100 transition-opacity">I'm Blocked</button>
+        <button 
+          onClick={handleBlocked}
+          className="btn btn-ghost btn-sm text-error opacity-50 hover:opacity-100 transition-opacity"
+        >
+          I'm Blocked
+        </button>
         <button onClick={onBack} className="btn btn-ghost btn-sm opacity-50 hover:opacity-100 transition-opacity">Back to Board</button>
       </div>
     </div>

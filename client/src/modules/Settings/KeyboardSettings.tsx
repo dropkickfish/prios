@@ -23,6 +23,10 @@ export const KeyboardSettings = () => {
     board_7: 'Jump to Board 7',
     board_8: 'Jump to Board 8',
     board_9: 'Jump to Board 9',
+    arrow_left: 'Prioritise: Do Later',
+    arrow_right: 'Prioritise: Do Now',
+    arrow_up: 'Prioritise: View Details',
+    board_prioritise: 'Launch Triage Mode',
   };
 
   const formatShortcut = (shortcut: typeof shortcuts[ShortcutAction]) => {

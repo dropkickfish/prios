@@ -116,6 +116,8 @@ export const BoardView = ({ boardId, onBack, onOpenPrioritise, onSwitchBoard }: 
   const [filterText, setFilterText] = useState('');
 
   // Shortcuts
+  useShortcut('board_prioritise', onOpenPrioritise);
+
   useShortcut('new_card', () => {
     // Only if we have a 'maybe' status to add to
     const firstMaybe = statuses.find(s => s.category === 'maybe');

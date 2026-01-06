@@ -16,7 +16,11 @@ export type ShortcutAction =
   | 'board_6'
   | 'board_7'
   | 'board_8'
-  | 'board_9';
+  | 'board_9'
+  | 'arrow_left'
+  | 'arrow_right'
+  | 'arrow_up'
+  | 'board_prioritise';
 
 interface Shortcut {
   key: string;
@@ -50,11 +54,15 @@ const defaultShortcuts: Record<ShortcutAction, Shortcut> = {
   board_7: { key: '7' },
   board_8: { key: '8' },
   board_9: { key: '9' },
+  arrow_left: { key: 'ArrowLeft' },
+  arrow_right: { key: 'ArrowRight' },
+  arrow_up: { key: 'ArrowUp' },
+  board_prioritise: { key: 'p' },
 };
 
 const KeyboardContext = createContext<KeyboardContextType | undefined>(undefined);
 
-const SHORTCUTS_VERSION = 2; // Increment this when defaults change significantly
+const SHORTCUTS_VERSION = 3; // Increment this when defaults change significantly
 
 export const KeyboardProvider = ({ children }: { children: ReactNode }) => {
   const [shortcuts, setShortcuts] = useState<Record<ShortcutAction, Shortcut>>(() => {
@@ -118,53 +126,29 @@ export const KeyboardProvider = ({ children }: { children: ReactNode }) => {
 
       const currentShortcuts = shortcutsRef.current;
       
-      console.log('Key pressed:', e.key, 'Modifiers:', { ctrl: e.ctrlKey, meta: e.metaKey, shift: e.shiftKey, alt: e.altKey });
-      console.log('Registered callbacks:', Object.keys(callbacksRef.current));
-      console.log('Available shortcuts:', currentShortcuts);
-
       const action = (Object.keys(currentShortcuts) as ShortcutAction[]).find(
         key => {
           const shortcut = currentShortcuts[key];
           
-          // Safety check: skip if shortcut or key is undefined
-          if (!shortcut || !shortcut.key) {
-            console.warn(`Shortcut for ${key} is missing or invalid:`, shortcut);
-            return false;
-          }
+          if (!shortcut || !shortcut.key) return false;
           
           const keyMatches = shortcut.key.toLowerCase() === e.key.toLowerCase();
-          
-          // Only log for keys that match to reduce noise
-          if (keyMatches) {
-            console.log(`Key match found for action "${key}":`, shortcut);
-            console.log(`Checking modifiers - shortcut:`, { ctrl: shortcut.ctrl, meta: shortcut.meta, shift: shortcut.shift, alt: shortcut.alt });
-            console.log(`Checking modifiers - event:`, { ctrl: e.ctrlKey, meta: e.metaKey, shift: e.shiftKey, alt: e.altKey });
-          }
-          
           const ctrlMatches = shortcut.ctrl ? e.ctrlKey : !e.ctrlKey;
           const metaMatches = shortcut.meta ? e.metaKey : !e.metaKey;
           const shiftMatches = shortcut.shift ? e.shiftKey : !e.shiftKey;
           const altMatches = shortcut.alt ? e.altKey : !e.altKey;
 
-          // For shortcuts with meta OR ctrl (cross-platform), accept either
           if (shortcut.meta && shortcut.ctrl) {
             return keyMatches && (e.metaKey || e.ctrlKey) && shiftMatches && altMatches;
           }
 
-          const matches = keyMatches && ctrlMatches && metaMatches && shiftMatches && altMatches;
-          if (keyMatches) {
-            console.log(`Match result for "${key}":`, { keyMatches, ctrlMatches, metaMatches, shiftMatches, altMatches, finalMatch: matches });
-          }
-          return matches;
+          return keyMatches && ctrlMatches && metaMatches && shiftMatches && altMatches;
         }
       );
 
       if (action && callbacksRef.current[action]) {
-        console.log('Executing action:', action);
         e.preventDefault();
         callbacksRef.current[action]?.();
-      } else {
-        console.log('No action found for key:', e.key);
       }
     };
 
