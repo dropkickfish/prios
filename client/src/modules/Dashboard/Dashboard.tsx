@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { 
   DndContext, 
   closestCenter, 
@@ -26,22 +27,14 @@ export { BoardView } from './BoardView';
 
 const MAX_BOARDS = 9;
 
-interface DashboardProps {
-  onOpenExecute: (boardId: string) => void;
-  onOpenBoard: (boardId: string) => void;
-  onOpenPrioritise: (boardId: string) => void;
-}
-
 interface SortableBoardCardProps {
   board: BoardType;
   index: number;
-  onOpenExecute: (boardId: string) => void;
-  onOpenBoard: (boardId: string) => void;
-  onOpenPrioritise: (boardId: string) => void;
   onEdit: (board: BoardType) => void;
 }
 
-const SortableBoardCard = ({ board, index, onOpenExecute, onOpenBoard, onOpenPrioritise, onEdit }: SortableBoardCardProps) => {
+const SortableBoardCard = ({ board, index, onEdit }: SortableBoardCardProps) => {
+  const navigate = useNavigate();
   const {
     attributes,
     listeners,
@@ -64,7 +57,7 @@ const SortableBoardCard = ({ board, index, onOpenExecute, onOpenBoard, onOpenPri
       style={style} 
       {...attributes} 
       {...listeners}
-      onClick={() => onOpenBoard(board.id)}
+      onClick={() => navigate(`/boards/${board.id}`)}
       className={`card bg-base-100 shadow-xl border-t-4 border-${board.colour || 'secondary'} hover:scale-[1.02] transition-transform overflow-hidden cursor-pointer group relative`}
     >
       {/* Board number badge */}
@@ -95,7 +88,7 @@ const SortableBoardCard = ({ board, index, onOpenExecute, onOpenBoard, onOpenPri
           <button 
             onClick={(e) => {
               e.stopPropagation();
-              onOpenBoard(board.id);
+              navigate(`/boards/${board.id}`);
             }} 
             className="btn btn-sm btn-outline opacity-50 hover:opacity-100"
             onPointerDown={(e) => e.stopPropagation()}
@@ -105,7 +98,7 @@ const SortableBoardCard = ({ board, index, onOpenExecute, onOpenBoard, onOpenPri
           <button 
             onClick={(e) => {
               e.stopPropagation();
-              onOpenPrioritise(board.id);
+              navigate(`/boards/${board.id}/prioritise`);
             }} 
             className="btn btn-sm btn-secondary text-white border-none shadow-md shadow-secondary/10"
             onPointerDown={(e) => e.stopPropagation()}
@@ -115,7 +108,7 @@ const SortableBoardCard = ({ board, index, onOpenExecute, onOpenBoard, onOpenPri
           <button 
             onClick={(e) => {
               e.stopPropagation();
-              onOpenExecute(board.id);
+              navigate(`/boards/${board.id}/execute`);
             }} 
             className="btn btn-sm btn-primary text-white border-none shadow-md shadow-primary/30"
             onPointerDown={(e) => e.stopPropagation()}
@@ -128,7 +121,8 @@ const SortableBoardCard = ({ board, index, onOpenExecute, onOpenBoard, onOpenPri
   );
 };
 
-export const Dashboard = ({ onOpenExecute, onOpenBoard, onOpenPrioritise }: DashboardProps) => {
+export const Dashboard = () => {
+  const navigate = useNavigate();
   const [boards, setBoards] = useState<BoardType[]>([]);
   const [loading, setLoading] = useState(true);
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -142,15 +136,15 @@ export const Dashboard = ({ onOpenExecute, onOpenBoard, onOpenPrioritise }: Dash
   });
 
   // Board jump shortcuts (1-9)
-  useShortcut('board_1', () => boards[0] && onOpenBoard(boards[0].id));
-  useShortcut('board_2', () => boards[1] && onOpenBoard(boards[1].id));
-  useShortcut('board_3', () => boards[2] && onOpenBoard(boards[2].id));
-  useShortcut('board_4', () => boards[3] && onOpenBoard(boards[3].id));
-  useShortcut('board_5', () => boards[4] && onOpenBoard(boards[4].id));
-  useShortcut('board_6', () => boards[5] && onOpenBoard(boards[5].id));
-  useShortcut('board_7', () => boards[6] && onOpenBoard(boards[6].id));
-  useShortcut('board_8', () => boards[7] && onOpenBoard(boards[7].id));
-  useShortcut('board_9', () => boards[8] && onOpenBoard(boards[8].id));
+  useShortcut('board_1', () => boards[0] && navigate(`/boards/${boards[0].id}`));
+  useShortcut('board_2', () => boards[1] && navigate(`/boards/${boards[1].id}`));
+  useShortcut('board_3', () => boards[2] && navigate(`/boards/${boards[2].id}`));
+  useShortcut('board_4', () => boards[3] && navigate(`/boards/${boards[3].id}`));
+  useShortcut('board_5', () => boards[4] && navigate(`/boards/${boards[4].id}`));
+  useShortcut('board_6', () => boards[5] && navigate(`/boards/${boards[5].id}`));
+  useShortcut('board_7', () => boards[6] && navigate(`/boards/${boards[6].id}`));
+  useShortcut('board_8', () => boards[7] && navigate(`/boards/${boards[7].id}`));
+  useShortcut('board_9', () => boards[8] && navigate(`/boards/${boards[8].id}`));
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -234,9 +228,6 @@ export const Dashboard = ({ onOpenExecute, onOpenBoard, onOpenPrioritise }: Dash
                   key={board.id} 
                   board={board}
                   index={index}
-                  onOpenBoard={onOpenBoard}
-                  onOpenExecute={onOpenExecute}
-                  onOpenPrioritise={onOpenPrioritise}
                   onEdit={setEditingBoard}
                 />
               ))}

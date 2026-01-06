@@ -1,117 +1,135 @@
 import { useState, useEffect } from 'react';
-import type { CardType } from '../../types';
+import { useParams, useNavigate } from 'react-router-dom';
 import { apiClient } from '../../api/client';
+import type { CardType, StatusType } from '../../types';
+import { CardComponent } from '../../components/CardComponent';
 
-interface ExecuteProps {
-  boardId: string;
-  onBack: () => void;
-}
-
-export const Execute = ({ boardId, onBack }: ExecuteProps) => {
+export const Execute = () => {
+  const { boardId } = useParams<{ boardId: string }>();
+  const navigate = useNavigate();
   const [activeCard, setActiveCard] = useState<CardType | null>(null);
+  const [statuses, setStatuses] = useState<StatusType[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const fetchActive = async () => {
-      const statuses = await apiClient.getStatuses(boardId);
-      const cards = await apiClient.getCards(boardId);
-      // We need to join with statuses to know the category
-      // In a real app the API would return this joined
-      const joinedCards = cards.map((c: any) => ({
-        ...c,
-        statusCategory: statuses.find((s: any) => s.id === c.statusId)?.category
-      }));
-      
-      const doing = joinedCards.find((c: any) => c.statusCategory === 'doing');
-      setActiveCard(doing || null);
-      setLoading(false);
-    };
-
-    fetchActive();
+    if (boardId) {
+      fetchData();
+    }
   }, [boardId]);
 
+  const fetchData = async () => {
+    if (!boardId) return;
+    setLoading(true);
+    try {
+      const [boardStatuses, boardCards] = await Promise.all([
+        apiClient.getStatuses(boardId),
+        apiClient.getCards(boardId),
+      ]);
+
+      setStatuses(boardStatuses);
+      
+      const doingStatus = boardStatuses.find((s: StatusType) => s.category === 'doing');
+      if (doingStatus) {
+        const card = boardCards.find((c: CardType) => c.statusId === doingStatus.id);
+        setActiveCard(card || null);
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleComplete = async () => {
-    if (!activeCard) return;
+    if (!activeCard || !boardId) return;
     
-    const statuses = await apiClient.getStatuses(boardId);
-    const doneStatus = statuses.find((s: any) => s.category === 'done');
-    
-    if (doneStatus) {
+    try {
+      const doneStatus = statuses.find(s => s.category === 'done');
+      if (!doneStatus) throw new Error('No "Done" status found');
+
       await apiClient.updateCard(activeCard.id, { statusId: doneStatus.id });
+      
       setActiveCard(null);
+      alert('Task Completed! Great work.');
+      navigate(`/boards/${boardId}`);
+    } catch (err: any) {
+      alert(err.message || 'Failed to complete task');
     }
   };
 
   const handleBlocked = async () => {
-    if (!activeCard) return;
+    if (!activeCard || !boardId) return;
 
-    const statuses = await apiClient.getStatuses(boardId);
-    const maybeStatus = statuses.find((s: any) => s.category === 'maybe');
+    try {
+      const maybeStatus = statuses.find(s => s.category === 'maybe');
+      if (!maybeStatus) throw new Error('No "Maybe" status found');
 
-    if (maybeStatus) {
       await apiClient.updateCard(activeCard.id, { statusId: maybeStatus.id });
       setActiveCard(null);
+      navigate(`/boards/${boardId}`);
+    } catch (err: any) {
+      alert(err.message || 'Failed to move to blocked');
     }
   };
 
   if (loading) {
     return (
       <div className="flex justify-center p-20">
-        <span className="loading loading-ring loading-lg text-primary"></span>
-      </div>
-    );
-  }
-
-  if (!activeCard) {
-    return (
-      <div className="flex flex-col items-center justify-center p-20 text-center gap-6">
-        <div className="p-10 bg-base-100 rounded-full shadow-inner">
-           <svg xmlns="http://www.w3.org/2000/svg" className="h-20 w-20 opacity-10" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" /></svg>
-        </div>
-        <div>
-          <h2 className="text-2xl font-bold opacity-40 uppercase tracking-widest">Nothing in "Doing"</h2>
-          <p className="opacity-60">Go back to the board or prioritise your backlog.</p>
-        </div>
-        <button onClick={onBack} className="btn btn-ghost">Back to Dashboard</button>
+        <span className="loading loading-spinner loading-lg text-primary"></span>
       </div>
     );
   }
 
   return (
-    <div className="max-w-md mx-auto flex flex-col items-center justify-center min-h-[70vh] text-center p-4">
-      <header className="mb-12">
-        <span className="text-xs uppercase tracking-[0.3em] text-primary font-black animate-pulse bg-primary/10 px-4 py-1 rounded-full">
-          Current Focus
-        </span>
-      </header>
+    <div className="max-w-4xl mx-auto space-y-8 animate-in fade-in duration-500">
+      <div className="flex justify-between items-center">
+        <div>
+          <h1 className="text-sm font-black uppercase tracking-[0.3em] opacity-30">Focus Mode</h1>
+          <p className="text-2xl font-black text-base-content">Current Task</p>
+        </div>
+        <button onClick={() => navigate(`/boards/${boardId}`)} className="btn btn-ghost">Exit</button>
+      </div>
 
-      <h1 className="text-4xl md:text-5xl font-black leading-tight text-base-content mb-8 drop-shadow-sm">
-        {activeCard.title}
-      </h1>
-      
-      {activeCard.description && (
-        <div className="prose prose-xl dark:prose-invert mb-12 mx-auto text-left opacity-80">
-          <div dangerouslySetInnerHTML={{ __html: activeCard.description }} />
+      {!activeCard ? (
+        <div className="flex flex-col items-center justify-center p-20 bg-base-100 rounded-[2rem] border-2 border-dashed border-base-300 space-y-4">
+           <p className="text-xl font-bold opacity-30 uppercase tracking-widest text-base-content">Nothing in progress</p>
+           <button onClick={() => navigate(`/boards/${boardId}/prioritise`)} className="btn btn-primary text-white px-8">Start Triage</button>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+           <div className="md:col-span-2">
+              <div className="shadow-2xl border-none p-4 bg-base-100 rounded-[1.5rem]">
+                <CardComponent 
+                  card={activeCard} 
+                  showActions={false} 
+                />
+              </div>
+           </div>
+           
+           <div className="flex flex-col gap-4">
+             <div className="card bg-base-100 shadow-xl p-6 space-y-6">
+                <h3 className="font-black uppercase tracking-widest text-xs opacity-40">Actions</h3>
+                <button 
+                  onClick={handleComplete}
+                  className="btn btn-primary btn-lg w-full text-white shadow-lg shadow-primary/20"
+                >
+                  Mark Complete
+                </button>
+                <button 
+                  onClick={handleBlocked}
+                  className="btn btn-outline btn-lg w-full"
+                >
+                  Blocked / Later
+                </button>
+             </div>
+             
+             <div className="card bg-primary/5 p-6 border border-primary/10">
+                <p className="text-xs font-bold text-primary uppercase tracking-widest mb-2">Pro Tip</p>
+                <p className="text-sm opacity-70 text-base-content">Focus on one thing at a time. Multi-tasking is a myth that drains your velocity.</p>
+             </div>
+           </div>
         </div>
       )}
-
-      <button 
-        onClick={handleComplete}
-        className="btn btn-primary btn-lg w-full h-20 text-2xl shadow-xl shadow-primary/30 hover:scale-[1.02] active:scale-95 transition-all gap-4 border-none"
-      >
-        <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor font-black"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="4" d="M5 13l4 4L19 7" /></svg>
-        Mark Complete
-      </button>
-
-      <div className="mt-12 flex flex-wrap justify-center gap-6">
-        <button 
-          onClick={handleBlocked}
-          className="btn btn-ghost btn-sm text-error opacity-50 hover:opacity-100 transition-opacity"
-        >
-          I'm Blocked
-        </button>
-        <button onClick={onBack} className="btn btn-ghost btn-sm opacity-50 hover:opacity-100 transition-opacity">Back to Board</button>
-      </div>
     </div>
   );
 };

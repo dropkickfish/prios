@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
 import { 
   DndContext, 
   DragOverlay, 
@@ -21,13 +22,6 @@ import { BoardSettingsModal } from './BoardSettingsModal';
 import { BoardSwitcher } from './BoardSwitcher';
 import { FilterBar } from './FilterBar';
 import { useShortcut } from '../../context/KeyboardContext';
-
-interface BoardViewProps {
-  boardId: string;
-  onBack: () => void;
-  onOpenPrioritise: () => void;
-  onSwitchBoard: (boardId: string) => void;
-}
 
 interface DraggableCardProps {
   card: CardType;
@@ -72,7 +66,9 @@ const DroppableColumn = ({ statusId, children }: DroppableColumnProps) => {
   );
 };
 
-export const BoardView = ({ boardId, onBack, onOpenPrioritise, onSwitchBoard }: BoardViewProps) => {
+export const BoardView = () => {
+  const { boardId } = useParams<{ boardId: string }>();
+  const navigate = useNavigate();
   const sensors = useSensors(
     useSensor(PointerSensor, {
       activationConstraint: {
@@ -116,7 +112,7 @@ export const BoardView = ({ boardId, onBack, onOpenPrioritise, onSwitchBoard }: 
   const [filterText, setFilterText] = useState('');
 
   // Shortcuts
-  useShortcut('board_prioritise', onOpenPrioritise);
+  useShortcut('board_prioritise', () => navigate(`/boards/${boardId}/prioritise`));
 
   useShortcut('new_card', () => {
     // Only if we have a 'maybe' status to add to
@@ -128,6 +124,8 @@ export const BoardView = ({ boardId, onBack, onOpenPrioritise, onSwitchBoard }: 
   });
 
   const fetchData = async () => {
+    if (!boardId) return;
+
     const [boards, boardStatuses, boardCards] = await Promise.all([
       apiClient.getBoards(),
       apiClient.getStatuses(boardId),
@@ -172,6 +170,7 @@ export const BoardView = ({ boardId, onBack, onOpenPrioritise, onSwitchBoard }: 
   }, [boardId]);
 
   const handleStatusChange = async (cardId: string, newStatusId: string) => {
+    if (!boardId) return;
     try {
       await apiClient.updateCard(cardId, { statusId: newStatusId });
       
@@ -189,7 +188,7 @@ export const BoardView = ({ boardId, onBack, onOpenPrioritise, onSwitchBoard }: 
          // Small delay to let the animation finish or user register the move
          setTimeout(() => {
            if (window.confirm("Great job! Want to triage your backlog now?")) {
-             onOpenPrioritise();
+             navigate(`/boards/${boardId}/prioritise`);
            }
          }, 500);
       }
@@ -265,7 +264,7 @@ export const BoardView = ({ boardId, onBack, onOpenPrioritise, onSwitchBoard }: 
           }}
         />
       )}
-      {showCreateModal && (
+      {showCreateModal && boardId && (
         <CreateCardModal 
           boardId={boardId} 
           statuses={statuses} 
@@ -285,7 +284,7 @@ export const BoardView = ({ boardId, onBack, onOpenPrioritise, onSwitchBoard }: 
         <div>
           <BoardSwitcher 
              currentBoard={board} 
-             onSwitch={onSwitchBoard} 
+             onSwitch={(id) => navigate(`/boards/${id}`)} 
           />
           <div className="flex items-center gap-2 opacity-50 text-xs font-bold uppercase tracking-widest mt-1">
             <span className={`w-2 h-2 rounded-full animate-pulse bg-${board.colour || 'primary'}`}></span>
@@ -304,7 +303,7 @@ export const BoardView = ({ boardId, onBack, onOpenPrioritise, onSwitchBoard }: 
                <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
              </svg>
           </button>
-          <button onClick={onBack} className="btn btn-ghost btn-sm rounded-xl px-4">Back</button>
+          <button onClick={() => navigate('/')} className="btn btn-ghost btn-sm rounded-xl px-4">Back</button>
           {statuses.some(s => s.category === 'maybe') && (
             <button 
               disabled={!!(showCreateModal || viewerCard || schedulingCard)}
@@ -350,7 +349,7 @@ export const BoardView = ({ boardId, onBack, onOpenPrioritise, onSwitchBoard }: 
                       
                       {status.category === 'maybe' && (
                         <button 
-                          onClick={onOpenPrioritise}
+                          onClick={() => navigate(`/boards/${boardId}/prioritise`)}
                           className="ml-auto btn btn-xs btn-circle btn-ghost opacity-50 hover:opacity-100"
                           title="Open Triage Mode"
                         >

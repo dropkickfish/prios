@@ -1,297 +1,184 @@
 import { useState, useEffect } from 'react';
-import { motion, useMotionValue, useTransform, type PanInfo } from 'framer-motion';
-import type { CardType, StatusType } from '../../types';
+import { useParams, useNavigate } from 'react-router-dom';
+import { motion, AnimatePresence } from 'framer-motion';
 import { apiClient } from '../../api/client';
+import type { CardType, StatusType } from '../../types';
+import { CardComponent } from '../../components/CardComponent';
 import { CardDetailModal } from '../Dashboard/CardDetailModal';
 import { useShortcut } from '../../context/KeyboardContext';
 
-interface PrioritiseProps {
-  boardId: string;
-  onBack: () => void;
-  onViewExecute: () => void;
-}
-
-export const Prioritise = ({ boardId, onBack, onViewExecute }: PrioritiseProps) => {
+export const Prioritise = () => {
+  const { boardId } = useParams<{ boardId: string }>();
+  const navigate = useNavigate();
   const [cards, setCards] = useState<CardType[]>([]);
   const [statuses, setStatuses] = useState<StatusType[]>([]);
-  const [currentIndex, setCurrentIndex] = useState(0);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [exitDirection, setExitDirection] = useState<'left' | 'right' | null>(null);
-  const [selectedCard, setSelectedCard] = useState<CardType | null>(null);
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const [direction, setDirection] = useState(0);
+  const [editingCard, setEditingCard] = useState<CardType | null>(null);
 
-  const x = useMotionValue(0);
-  const rotate = useTransform(x, [-200, 200], [-25, 25]);
-  const opacity = useTransform(x, [-200, -100, 0, 100, 200], [0, 1, 1, 1, 0]);
-  const crossOpacity = useTransform(x, [-150, -50], [1, 0]);
-  const checkOpacity = useTransform(x, [50, 150], [0, 1]);
+  // Keyboard Shortcuts for Triage
+  useShortcut('arrow_left', () => handleDecision('skip'));
+  useShortcut('arrow_right', () => handleDecision('focus'));
+  useShortcut('arrow_up', () => currentCard && setEditingCard(currentCard));
 
   useEffect(() => {
-    const fetchData = async () => {
-      const [boardStatuses, boardCards] = await Promise.all([
-        apiClient.getStatuses(boardId),
-        apiClient.getCards(boardId),
-      ]);
-
-      setStatuses(boardStatuses);
-      
-      // Filter for cards in 'maybe' category
-      const joinedCards = boardCards.map((c: any) => ({
-        ...c,
-        statusCategory: boardStatuses.find((s: StatusType) => s.id === c.statusId)?.category
-      }));
-      
-      const maybeCards = joinedCards.filter((c: any) => c.statusCategory === 'maybe');
-      setCards(maybeCards);
-      setLoading(false);
-    };
-
-    fetchData();
+    if (boardId) {
+      fetchData();
+    }
   }, [boardId]);
 
-  const handleDecision = async (decision: 'yes' | 'no') => {
-    const activeCard = cards[currentIndex];
-    if (!activeCard) return;
-
-    setExitDirection(decision === 'yes' ? 'right' : 'left');
-
-    // Wait for animation to complete
-    setTimeout(async () => {
-      if (decision === 'yes') {
-        const doingStatus = statuses.find(s => s.category === 'doing');
-        if (doingStatus) {
-          try {
-            await apiClient.updateCard(activeCard.id, { statusId: doingStatus.id });
-            onViewExecute();
-            return;
-          } catch (err: any) {
-            setError(err.message || 'Failed to move to Doing. Is another task already in progress?');
-            setExitDirection(null);
-            return;
-          }
-        }
-      } else {
-        // Move to next card in the maybe pile
-        await apiClient.recordAbandon();
-      }
+  const fetchData = async () => {
+    if (!boardId) return;
+    setLoading(true);
+    try {
+      const [allCards, boardStatuses] = await Promise.all([
+        apiClient.getCards(boardId),
+        apiClient.getStatuses(boardId)
+      ]);
       
-      setCurrentIndex(prev => prev + 1);
-      setExitDirection(null);
-      x.set(0);
-    }, 300);
+      setStatuses(boardStatuses);
+      
+      const maybeStatuses = boardStatuses.filter((s: StatusType) => s.category === 'maybe').map((s: StatusType) => s.id);
+      const maybeCards = allCards.filter((c: CardType) => maybeStatuses.includes(c.statusId));
+      
+      setCards(maybeCards);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleDragEnd = (_: any, info: PanInfo) => {
-    const threshold = 150;
-    if (Math.abs(info.offset.x) > threshold) {
-      handleDecision(info.offset.x > 0 ? 'yes' : 'no');
+  const handleDecision = async (decision: 'skip' | 'focus') => {
+    if (!boardId || currentIndex >= cards.length) return;
+
+    const card = cards[currentIndex];
+    setDirection(decision === 'focus' ? 1 : -1);
+
+    if (decision === 'focus') {
+      try {
+        const doingStatus = statuses.find(s => s.category === 'doing');
+        if (!doingStatus) throw new Error('No "Doing" status found for this board');
+
+        await apiClient.updateCard(card.id, { statusId: doingStatus.id });
+        
+        setTimeout(() => {
+          setDirection(0);
+          setCurrentIndex(prev => prev + 1);
+        }, 300);
+      } catch (err: any) {
+        alert(err.message || 'Another task is already in progress. Finish it first!');
+        setDirection(0);
+      }
     } else {
-      x.set(0);
+      setTimeout(() => {
+        setDirection(0);
+        setCurrentIndex(prev => prev + 1);
+      }, 300);
     }
-  };
-
-  const refreshCards = async () => {
-    const boardCards = await apiClient.getCards(boardId);
-    const joinedCards = boardCards.map((c: any) => ({
-      ...c,
-      statusCategory: statuses.find((s: StatusType) => s.id === c.statusId)?.category
-    }));
-    const maybeCards = joinedCards.filter((c: any) => c.statusCategory === 'maybe');
-    setCards(maybeCards);
-  };
-
-  // Keyboard shortcuts
-  useShortcut('arrow_left', () => handleDecision('no'), currentIndex < cards.length);
-  useShortcut('arrow_right', () => handleDecision('yes'), currentIndex < cards.length);
-  useShortcut('arrow_up', () => {
-    if (currentIndex < cards.length) {
-      setSelectedCard(cards[currentIndex]);
-    }
-  }, currentIndex < cards.length);
-
-  // Render HTML description
-  const renderDescription = (description: string | null) => {
-    if (!description) return null;
-    
-    // If it's HTML from TipTap
-    if (description.includes('<p>') || description.includes('<')) {
-      return (
-        <div 
-          className="text-sm opacity-70 line-clamp-4 leading-relaxed prose prose-sm max-w-none"
-          dangerouslySetInnerHTML={{ __html: description }}
-        />
-      );
-    }
-    
-    // Plain text
-    return (
-      <p className="text-sm opacity-70 line-clamp-4 leading-relaxed">
-        {description}
-      </p>
-    );
   };
 
   if (loading) {
     return (
       <div className="flex justify-center p-20">
-        <span className="loading loading-ring loading-lg text-secondary"></span>
+        <span className="loading loading-spinner loading-lg text-primary"></span>
       </div>
     );
   }
 
-  if (currentIndex >= cards.length) {
+  const currentCard = cards[currentIndex];
+
+  if (!currentCard) {
     return (
-      <div className="flex flex-col items-center justify-center p-20 text-center gap-6">
-        <div className="p-10 bg-base-100 rounded-full shadow-inner">
-          <svg xmlns="http://www.w3.org/2000/svg" className="h-20 w-20 text-success opacity-20" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" /></svg>
+      <div className="flex flex-col items-center justify-center p-20 space-y-6">
+        <div className="w-24 h-24 bg-success/10 rounded-full flex items-center justify-center">
+           <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-12 h-12 text-success">
+             <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+           </svg>
         </div>
-        <div>
-          <h2 className="text-2xl font-bold opacity-40 uppercase tracking-widest text-base-content">Backlog Triaged</h2>
-          <p className="opacity-60 text-base-content/70">No more "Maybe" tasks for now. Great work!</p>
+        <h2 className="text-3xl font-black text-base-content">Backlog Cleared!</h2>
+        <p className="opacity-60 text-center max-w-xs text-base-content">You've triaged everything in your 'Maybe' pile. Time to execute.</p>
+        <div className="flex gap-4">
+          <button onClick={() => navigate('/')} className="btn btn-ghost">Dashboard</button>
+          <button onClick={() => navigate(`/boards/${boardId}/execute`)} className="btn btn-primary text-white">Go to Execute</button>
         </div>
-        <button onClick={onBack} className="btn btn-ghost">Back to Dashboard</button>
       </div>
     );
   }
-
-  const activeCard = cards[currentIndex];
-  const nextCards = cards.slice(currentIndex + 1, currentIndex + 3);
 
   return (
-    <div className="max-w-md mx-auto flex flex-col items-center justify-center min-h-[70vh] text-center p-4">
-      <header className="mb-12 flex flex-col gap-2">
-        <span className="text-xs uppercase tracking-[0.3em] text-secondary font-black bg-secondary/10 px-4 py-1 rounded-full w-fit mx-auto">
-          Triage Mode
-        </span>
-        <p className="text-[10px] opacity-40 uppercase font-bold">
-          Card {currentIndex + 1} of {cards.length}
-        </p>
-      </header>
+    <div className="max-w-md mx-auto h-[70vh] flex flex-col items-center justify-center space-y-8">
+      <div className="text-center w-full">
+         <h1 className="text-sm font-black uppercase tracking-[0.3em] opacity-30 mb-2 text-base-content">Triage Mode</h1>
+         <div className="flex justify-center gap-1">
+            {cards.map((_, i) => (
+              <div key={i} className={`h-1 rounded-full transition-all duration-300 ${i === currentIndex ? 'w-8 bg-primary' : i < currentIndex ? 'w-4 bg-primary/20' : 'w-4 bg-base-300'}`}></div>
+            ))}
+         </div>
+      </div>
 
-      {error && (
-        <div className="alert alert-error mb-8 shadow-lg text-xs font-bold uppercase tracking-tight">
-          <span>{error}</span>
-          <button onClick={() => setError(null)} className="btn btn-ghost btn-xs">OK</button>
-        </div>
-      )}
-
-      {/* Card Stack */}
-      <div className="relative w-full h-[450px] mb-12">
-        {/* Background cards (stack preview) */}
-        {nextCards.map((card, index) => (
-          <div
-            key={card.id}
-            className="absolute inset-0 card bg-base-100 shadow-xl border-b-4 border-base-300"
-            style={{
-              transform: `scale(${1 - (index + 1) * 0.05}) translateY(${(index + 1) * -10}px)`,
-              opacity: 0.5 - index * 0.2,
-              zIndex: -index - 1,
+      <div className="relative w-full aspect-[3/4] perspective-1000">
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={currentCard.id}
+            initial={{ scale: 0.8, opacity: 0, y: 20 }}
+            animate={{ 
+              scale: 1, 
+              opacity: 1, 
+              y: 0,
+              x: direction * 300,
+              rotate: direction * 15
             }}
-          />
-        ))}
-
-        {/* Active card */}
-        <motion.div
-          className="absolute inset-0 card bg-base-100 shadow-2xl border-b-8 border-secondary cursor-grab active:cursor-grabbing"
-          style={{
-            x,
-            rotate,
-            opacity,
-            zIndex: 10,
-          }}
-          drag="x"
-          dragConstraints={{ left: 0, right: 0 }}
-          onDragEnd={handleDragEnd}
-          animate={exitDirection ? {
-            x: exitDirection === 'right' ? 500 : -500,
-            opacity: 0,
-            transition: { duration: 0.3 }
-          } : {}}
-        >
-          <div className="card-body flex flex-col justify-center items-center p-8 h-full">
-            <h1 className="text-4xl font-black leading-tight text-base-content mb-6">
-              {activeCard.title}
-            </h1>
-            
-            <div className="flex justify-center gap-3 mb-6">
-              <span className="badge badge-outline badge-lg font-black tracking-tight">
-                DIFF: {activeCard.difficulty}
-              </span>
-              <span className="badge badge-outline badge-lg font-black tracking-tight">
-                PRIO: {activeCard.priority}
-              </span>
+            exit={{ scale: 0.8, opacity: 0 }}
+            transition={{ type: 'spring', damping: 20, stiffness: 300 }}
+            className="w-full h-full cursor-grab active:cursor-grabbing"
+          >
+            <div className="h-full shadow-2xl overflow-hidden border-2 border-primary/10 rounded-[1.5rem]">
+              <CardComponent 
+                card={currentCard} 
+                showActions={false} 
+                onClick={() => setEditingCard(currentCard)}
+              />
             </div>
-            
-            {activeCard.description && (
-              <div className="max-w-sm">
-                {renderDescription(activeCard.description)}
-              </div>
-            )}
-
-            {/* Tap to view details hint */}
-            <button
-              onClick={() => setSelectedCard(activeCard)}
-              className="mt-auto text-xs opacity-30 hover:opacity-60 transition-opacity uppercase tracking-widest font-bold"
-            >
-              ↑ View Details
-            </button>
-          </div>
-
-          {/* Swipe indicators */}
-          <motion.div
-            className="absolute top-8 left-8 text-6xl font-black text-error rotate-[-20deg]"
-            style={{ opacity: crossOpacity }}
-          >
-            ✗
           </motion.div>
-          <motion.div
-            className="absolute top-8 right-8 text-6xl font-black text-success rotate-[20deg]"
-            style={{ opacity: checkOpacity }}
-          >
-            ✓
-          </motion.div>
-        </motion.div>
+        </AnimatePresence>
       </div>
 
-      {/* Action buttons */}
-      <div className="grid grid-cols-2 gap-6 w-full px-4">
+      <div className="flex gap-8 items-center">
         <button 
-          onClick={() => handleDecision('no')}
-          className="btn btn-outline btn-lg h-20 text-xl gap-2 border-2 hover:bg-base-200 hover:text-base-content"
-          disabled={exitDirection !== null}
+          onClick={() => handleDecision('skip')}
+          className="btn btn-circle btn-lg h-20 w-20 bg-base-100 border-none shadow-xl hover:bg-error hover:text-white transition-all group scale-90 hover:scale-100"
+          title="Skip for now (Left Arrow)"
         >
-          <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" /></svg>
-          Not Today
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-8 h-8">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+          </svg>
         </button>
+        
         <button 
-          onClick={() => handleDecision('yes')}
-          className="btn btn-secondary btn-lg h-20 text-xl shadow-xl shadow-secondary/30 gap-2 border-none"
-          disabled={exitDirection !== null}
+          onClick={() => handleDecision('focus')}
+          className="btn btn-circle btn-lg h-20 w-20 bg-primary border-none shadow-xl shadow-primary/30 hover:bg-primary-focus text-white transition-all hover:scale-110"
+          title="Focus Now (Right Arrow)"
         >
-          <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7" /></svg>
-          Focus Now
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-8 h-8">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+          </svg>
         </button>
       </div>
 
-      <button onClick={onBack} className="mt-10 btn btn-ghost btn-sm opacity-40 hover:opacity-100 transition-opacity">
-        Wait, take me back
-      </button>
+      <div className="flex gap-4">
+        <button onClick={() => navigate('/')} className="btn btn-ghost btn-sm opacity-50">Cancel Session</button>
+      </div>
 
-      {/* Card Detail Modal */}
-      {selectedCard && (
-        <CardDetailModal
-          card={selectedCard}
-          statuses={statuses}
+      {editingCard && (
+        <CardDetailModal 
+          card={editingCard}
           allCards={cards}
-          onClose={() => setSelectedCard(null)}
-          onUpdated={() => {
-            refreshCards();
-            setSelectedCard(null);
-          }}
-          onDeleted={() => {
-            refreshCards();
-            setSelectedCard(null);
-          }}
+          statuses={statuses}
+          onClose={() => setEditingCard(null)}
+          onUpdated={fetchData}
+          onDeleted={fetchData}
         />
       )}
     </div>
