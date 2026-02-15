@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-
+import { apiClient } from '../../api/client';
 import type { BoardType } from '../../types';
 
 interface BoardSettingsModalProps {
@@ -41,18 +41,16 @@ export const BoardSettingsModal: React.FC<BoardSettingsModalProps> = ({ board, o
     e.preventDefault();
     setLoading(true);
     try {
-      const res = await fetch(`http://localhost:3000/api/boards/${board.id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, colour, availabilitySchedule: schedule, schedulingWindowDays }),
+      const updated = await apiClient.updateBoard(board.id, {
+        name,
+        colour,
+        availabilitySchedule: schedule,
+        schedulingWindowDays,
       });
-      if (res.ok) {
-        const updated = await res.json();
-        onUpdated(updated);
-        onClose();
-      }
-    } catch (err: any) {
-      alert(err.message || 'Failed to update board');
+      onUpdated(updated);
+      onClose();
+    } catch (err: unknown) {
+      alert(err instanceof Error ? err.message : 'Failed to update board');
     } finally {
       setLoading(false);
     }
@@ -62,21 +60,13 @@ export const BoardSettingsModal: React.FC<BoardSettingsModalProps> = ({ board, o
     if (deleteConfirm !== board.name) return;
     setLoading(true);
     try {
-        const res = await fetch(`http://localhost:3000/api/boards/${board.id}`, {
-            method: 'DELETE',
-        });
-        if (res.ok) {
-            if (onDeleted) {
-              onDeleted();
-            } else {
-              navigate('/');
-            }
-        } else {
-            throw new Error('Failed to delete board');
-        }
-    } catch (err: any) {
-        alert(err.message || 'Failed to delete board');
-        setLoading(false);
+      await apiClient.deleteBoard(board.id);
+      if (onDeleted) onDeleted();
+      else navigate('/');
+    } catch (err: unknown) {
+      alert(err instanceof Error ? err.message : 'Failed to delete board');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -108,8 +98,8 @@ export const BoardSettingsModal: React.FC<BoardSettingsModalProps> = ({ board, o
   };
 
   return (
-    <div className="modal modal-open bg-base-300/60 backdrop-blur-sm z-50">
-      <div className="modal-box max-w-2xl border border-base-content/10 shadow-2xl rounded-3xl p-0 overflow-hidden flex flex-col max-h-[90vh]">
+    <div className="modal modal-open bg-base-300/60 backdrop-blur-sm z-50" onClick={onClose} role="dialog" aria-modal="true">
+      <div className="modal-box max-w-2xl border border-base-content/10 shadow-2xl rounded-3xl p-0 overflow-hidden flex flex-col max-h-[90vh]" onClick={e => e.stopPropagation()}>
         {/* Header */}
         <div className="p-6 pb-0">
           <h3 className="text-3xl font-black text-base-content tracking-tight">Board Settings</h3>

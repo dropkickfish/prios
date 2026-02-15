@@ -61,6 +61,12 @@ npm run dev
 2. **Prioritise**: Use the swipe interface to move "Maybe" tasks to "Doing".
 3. **Execute**: Focus on your single active task until it's "Done".
 
+## Testing & Seeding
+- **Seed with test data** (extra board, sample tasks, 7 days of stats): `cd server && SEED_TEST_DATA=1 npm run db:seed` (or `npm run db:seed:test` on Unix).
+- **Client unit tests**: `cd client && npm run test`.
+- **API smoke test** (server must be running): `./scripts/smoke-test.sh`.
+- **Current state & roadmap**: See `planning/CURRENT_STATE_VERIFICATION.md`.
+
 ## Tech Stack
 - **Backend**: Fastify, Drizzle ORM, Better-SQLite3.
 - **Frontend**: Vite, React, Tailwind CSS, DaisyUI.

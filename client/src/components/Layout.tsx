@@ -9,8 +9,8 @@ export const Layout = ({ children }: LayoutProps) => {
   const navigate = useNavigate();
 
   return (
-    <div className="min-h-screen bg-base-200">
-      <div className="navbar bg-base-100 shadow-sm px-4">
+    <div className="min-h-screen bg-base-200 flex flex-col">
+      <div className="navbar bg-base-100 shadow-sm px-4 shrink-0">
         <div className="flex-1">
           <button 
             onClick={() => navigate('/')} 
@@ -44,7 +44,7 @@ export const Layout = ({ children }: LayoutProps) => {
           </ul>
         </div>
       </div>
-      <main className="p-4 md:p-8">
+      <main className="p-4 md:p-8 flex-1 min-h-0 flex flex-col">
         {children}
       </main>
     </div>

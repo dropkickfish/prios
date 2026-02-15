@@ -15,6 +15,20 @@ export const apiClient = {
     });
     return res.json();
   },
+  updateBoard: async (boardId: string, data: Record<string, unknown>) => {
+    const res = await fetch(`${API_BASE}/boards/${boardId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+    if (!res.ok) throw new Error((await res.json()).error || 'Failed to update board');
+    return res.json();
+  },
+  deleteBoard: async (boardId: string) => {
+    const res = await fetch(`${API_BASE}/boards/${boardId}`, { method: 'DELETE' });
+    if (!res.ok) throw new Error((await res.json()).error || 'Failed to delete board');
+    return res.json();
+  },
   reorderBoards: async (boards: { id: string; order: number }[]) => {
     const res = await fetch(`${API_BASE}/boards/reorder`, {
       method: 'PUT',
@@ -62,6 +76,16 @@ export const apiClient = {
   },
   recordAbandon: async () => {
     const res = await fetch(`${API_BASE}/stats/abandon`, { method: 'POST' });
+    return res.json();
+  },
+  resetStats: async () => {
+    const res = await fetch(`${API_BASE}/stats`, { method: 'DELETE' });
+    if (!res.ok) throw new Error((await res.json()).error || 'Failed to reset stats');
+    return res.json();
+  },
+  resetStatsForDate: async (date: string) => {
+    const res = await fetch(`${API_BASE}/stats/${date}`, { method: 'DELETE' });
+    if (!res.ok) throw new Error((await res.json()).error || 'Failed to reset stats for date');
     return res.json();
   },
   createCard: async (boardId: string, card: Partial<CardType>) => {

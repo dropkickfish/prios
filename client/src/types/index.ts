@@ -25,6 +25,7 @@ export interface CardType {
   id: string;
   boardId: string;
   statusId: string;
+  statusCategory?: 'maybe' | 'scheduled' | 'doing' | 'done' | 'wontdo' | null;
   title: string;
   description: any;
   difficulty: number;

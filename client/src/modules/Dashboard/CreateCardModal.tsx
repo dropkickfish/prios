@@ -64,9 +64,10 @@ export const CreateCardModal = ({ boardId, statuses, existingCards, initialStatu
   };
 
   return (
-    <div className="modal modal-open bg-base-300/60 backdrop-blur-sm">
-      <div className="modal-box max-w-4xl w-full lg:w-[80%] border border-base-content/10 shadow-2xl rounded-3xl p-8">
-        <h3 className="text-3xl font-black mb-8 text-primary">New Task</h3>
+    <div className="modal modal-open bg-base-300/60 backdrop-blur-sm" onClick={onClose} role="dialog" aria-modal="true">
+      <div className="modal-box max-w-4xl w-full lg:w-[80%] border border-base-content/10 shadow-2xl rounded-3xl p-8" onClick={e => e.stopPropagation()}>
+        <h3 className="text-3xl font-black mb-2 text-primary">New Task</h3>
+        <p className="text-sm opacity-60 mb-6">Does this deserve your focus?</p>
 
         {error && (
           <div className="alert alert-error mb-6 shadow-md uppercase text-xs font-black tracking-widest leading-tight">

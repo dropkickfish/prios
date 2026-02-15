@@ -561,19 +561,25 @@ fastify.post('/api/boards', async (request) => {
 
 fastify.delete('/api/cards/:id', async (request, reply) => {
   const { id } = request.params as any;
-  
-  // Track abandonment stats before deleting
-  try {
-    const stats = await getOrCreateTodayStats();
-    await db.update(schema.userStats)
-      .set({ abandonedCount: (stats.abandonedCount || 0) + 1 })
-      .where(eq(schema.userStats.date, stats.date));
-  } catch (err) {
-    request.log.error(err, 'Failed to update abandoned stats');
+  const cardRows = await db.select().from(schema.cards).where(eq(schema.cards.id, id));
+  if (cardRows.length === 0) return reply.status(404).send({ error: 'Card not found' });
+  const card = cardRows[0];
+  const statusRow = await db.select().from(schema.statuses).where(eq(schema.statuses.id, card.statusId));
+  const wasDoing = statusRow[0]?.category === 'doing';
+
+  if (wasDoing) {
+    try {
+      const stats = await getOrCreateTodayStats();
+      await db.update(schema.userStats)
+        .set({ abandonedCount: (stats.abandonedCount || 0) + 1 })
+        .where(eq(schema.userStats.date, stats.date));
+    } catch (err) {
+      request.log.error(err, 'Failed to update abandoned stats');
+    }
   }
 
   await db.delete(schema.cards).where(eq(schema.cards.id, id));
-  await db.delete(schema.cardTags).where(eq(schema.cardTags.cardId, id)); // Clean up tags
+  await db.delete(schema.cardTags).where(eq(schema.cardTags.cardId, id));
   return { success: true };
 });
 
@@ -612,12 +618,13 @@ fastify.post('/api/boards/:boardId/statuses', async (request) => {
 // Cards
 fastify.get('/api/boards/:boardId/cards', async (request) => {
   const { boardId } = request.params as any;
+  const boardStatuses = await db.select().from(schema.statuses).where(eq(schema.statuses.boardId, boardId));
+  const statusById = new Map(boardStatuses.map(s => [s.id, s]));
   const cards = await db.select().from(schema.cards).where(eq(schema.cards.boardId, boardId));
-  
+
   // Fetch tags for these cards
   const allCardIds = cards.map(c => c.id);
   let tagsMap = new Map();
-  
   if (allCardIds.length > 0) {
     const cardTagsJoined = await db.select({
       cardId: schema.cardTags.cardId,
@@ -626,19 +633,21 @@ fastify.get('/api/boards/:boardId/cards', async (request) => {
     .from(schema.cardTags)
     .innerJoin(schema.tags, eq(schema.cardTags.tagId, schema.tags.id))
     .where(or(...allCardIds.map(id => eq(schema.cardTags.cardId, id))));
-
     cardTagsJoined.forEach(ct => {
       if (!tagsMap.has(ct.cardId)) tagsMap.set(ct.cardId, []);
       tagsMap.get(ct.cardId).push(ct.tag);
     });
   }
 
-  return cards.map(c => ({
-    ...c,
-    // Smart Score V2: (Priority / Difficulty) - (0.5 * DeferredCount)
-    smartScore: parseFloat(((c.priority / c.difficulty) - (0.5 * (c.deferredCount || 0))).toFixed(2)),
-    tags: tagsMap.get(c.id) || []
-  }));
+  return cards.map(c => {
+    const status = statusById.get(c.statusId);
+    return {
+      ...c,
+      statusCategory: status?.category ?? null,
+      smartScore: parseFloat(((c.priority / c.difficulty) - (0.5 * (c.deferredCount || 0))).toFixed(2)),
+      tags: tagsMap.get(c.id) || []
+    };
+  });
 });
 
 fastify.patch('/api/boards/:id', async (request, reply) => {
@@ -1159,13 +1168,30 @@ fastify.get('/api/stats', async () => {
   const totalA = allStats.reduce((sum, s) => sum + (s.abandonedCount || 0), 0);
   const efficiency = totalC === 0 ? 0 : (totalC / (totalC + totalA)) * 100;
 
+  // Heatmap & velocity: last 84 days (12 weeks) for heatmap; last 14 for chart
+  const heatmapDays = allStats.slice(0, 84);
+  const velocityDays = allStats.slice(0, 14);
+
   return {
     currentStreak,
     weeklyVelocity: parseFloat(weeklyVelocity.toFixed(1)),
     efficiency: Math.round(efficiency),
     history: last7Days,
+    heatmapData: heatmapDays,
+    velocityData: velocityDays,
   };
+});
 
+fastify.delete('/api/stats', async () => {
+  await db.delete(schema.userStats);
+  return { success: true };
+});
+
+fastify.delete('/api/stats/:date', async (request, reply) => {
+  const { date } = request.params as any; // YYYY-MM-DD
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return reply.status(400).send({ error: 'Invalid date format; use YYYY-MM-DD' });
+  await db.delete(schema.userStats).where(eq(schema.userStats.date, date));
+  return { success: true };
 });
 
 // Calendar Sync
