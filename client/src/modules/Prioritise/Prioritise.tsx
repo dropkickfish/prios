@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { apiClient } from '../../api/client';
@@ -6,6 +6,7 @@ import type { CardType, StatusType, TagType } from '../../types';
 import { CardComponent } from '../../components/CardComponent';
 import { CardDetailModal } from '../Dashboard/CardDetailModal';
 import { useShortcut } from '../../context/KeyboardContext';
+import { getTriageAutoFocusEnabled, getTriageAutoFocusMinutes } from '../../settings/triageSettings';
 
 export const Prioritise = () => {
   const { boardId } = useParams<{ boardId: string }>();
@@ -20,7 +21,29 @@ export const Prioritise = () => {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [direction, setDirection] = useState(0);
   const [editingCard, setEditingCard] = useState<CardType | null>(null);
-  const [sessionLimit] = useState(10); // Default session limit
+  const [sessionLimit] = useState(10);
+  const [swapPrompt, setSwapPrompt] = useState<{ currentDoing: CardType; cardToFocus: CardType } | null>(null);
+  const autoFocusTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [dragOffset, setDragOffset] = useState(0);
+  const dragStartRef = useRef<{ x: number } | null>(null);
+  const hasDraggedRef = useRef(false);
+
+  const clearAutoFocusTimer = () => {
+    if (autoFocusTimerRef.current) {
+      clearTimeout(autoFocusTimerRef.current);
+      autoFocusTimerRef.current = null;
+    }
+  };
+
+  const startAutoFocusTimer = () => {
+    clearAutoFocusTimer();
+    if (!boardId || !getTriageAutoFocusEnabled()) return;
+    const minutes = getTriageAutoFocusMinutes();
+    autoFocusTimerRef.current = setTimeout(() => {
+      autoFocusTimerRef.current = null;
+      navigate(`/boards/${boardId}/execute`);
+    }, minutes * 60 * 1000);
+  };
 
   // Keyboard Shortcuts for Triage
   useShortcut('arrow_left', () => handleDecision('skip'));
@@ -93,6 +116,14 @@ export const Prioritise = () => {
     .filter(c => selectedTagIds.length === 0 || (c.tags && c.tags.some(t => selectedTagIds.includes(t.id))))
     .slice(0, sessionLimit);
 
+  // Start or reset "blend into focus" timer when in triage with a card (must be after filteredCards)
+  useEffect(() => {
+    const hasCard = filteredCards[currentIndex];
+    if (!boardId || !hasCard) return;
+    startAutoFocusTimer();
+    return clearAutoFocusTimer;
+  }, [boardId, currentIndex, filteredCards.length]);
+
   const handleDecision = async (decision: 'skip' | 'focus') => {
     if (!boardId || currentIndex >= filteredCards.length) return;
 
@@ -100,19 +131,27 @@ export const Prioritise = () => {
     setDirection(decision === 'focus' ? 1 : -1);
 
     if (decision === 'focus') {
+      const doingStatus = statuses.find(s => s.category === 'doing');
+      if (!doingStatus) {
+        setDirection(0);
+        return;
+      }
       try {
-        const doingStatus = statuses.find(s => s.category === 'doing');
-        if (!doingStatus) throw new Error('No "Doing" status found for this board');
-
         await apiClient.updateCard(card.id, { statusId: doingStatus.id });
-        
         setTimeout(() => {
           setDirection(0);
           navigate(`/boards/${boardId}/execute`);
         }, 300);
       } catch (err: any) {
-        alert(err.message || 'Another task is already in progress. Finish it first!');
         setDirection(0);
+        if (err?.message?.includes('Only one card') || err?.message?.includes('already in progress')) {
+          const allCards = await apiClient.getCards(boardId!);
+          const doingCard = allCards.find((c: CardType) => c.statusCategory === 'doing' || c.statusId === doingStatus.id);
+          if (doingCard) setSwapPrompt({ currentDoing: doingCard, cardToFocus: card });
+          else alert(err.message || 'Another task is in Focus. Finish it first.');
+        } else {
+          alert(err.message || 'Failed to move to Focus.');
+        }
       }
     } else {
       // Skip logic: increment deferredCount
@@ -141,10 +180,52 @@ export const Prioritise = () => {
   };
 
   const toggleTag = (tagId: string) => {
-    setSelectedTagIds(prev => 
+    setSelectedTagIds(prev =>
       prev.includes(tagId) ? prev.filter(id => id !== tagId) : [...prev, tagId]
     );
     setCurrentIndex(0); // Reset session
+  };
+
+  const SWIPE_THRESHOLD = 80;
+  const DRAG_CAP = 120;
+
+  const handlePointerDown = (e: React.PointerEvent) => {
+    dragStartRef.current = { x: e.clientX };
+    setDragOffset(0);
+    hasDraggedRef.current = false;
+    (e.target as HTMLElement).setPointerCapture?.(e.pointerId);
+  };
+
+  const handlePointerMove = (e: React.PointerEvent) => {
+    if (dragStartRef.current == null) return;
+    const delta = e.clientX - dragStartRef.current.x;
+    if (Math.abs(delta) > 10) hasDraggedRef.current = true;
+    setDragOffset(Math.max(-DRAG_CAP, Math.min(DRAG_CAP, delta)));
+  };
+
+  const handlePointerUp = (e: React.PointerEvent) => {
+    (e.target as HTMLElement).releasePointerCapture?.(e.pointerId);
+    if (dragStartRef.current == null) return;
+    const delta = dragOffset;
+    dragStartRef.current = null;
+    setDragOffset(0);
+    if (Math.abs(delta) >= SWIPE_THRESHOLD) {
+      handleDecision(delta > 0 ? 'focus' : 'skip');
+    }
+    if (hasDraggedRef.current) {
+      setTimeout(() => { hasDraggedRef.current = false; }, 100);
+    }
+  };
+
+  const handlePointerCancel = (e: React.PointerEvent) => {
+    (e.target as HTMLElement).releasePointerCapture?.(e.pointerId);
+    dragStartRef.current = null;
+    setDragOffset(0);
+  };
+
+  const handleCardClick = (_id?: string) => {
+    if (hasDraggedRef.current) return;
+    setEditingCard(currentCard!);
   };
 
   if (loading) {
@@ -178,7 +259,7 @@ export const Prioritise = () => {
   }
 
   return (
-    <div className="max-w-md mx-auto h-[85vh] flex flex-col items-center justify-center space-y-6">
+    <div className="w-full max-w-md lg:max-w-xl xl:max-w-2xl mx-auto flex-1 flex flex-col min-h-0 items-center justify-start space-y-6 py-4">
       <div className="text-center w-full space-y-4">
          <div>
            <h1 className="text-sm font-black uppercase tracking-[0.3em] opacity-30 mb-2 text-base-content">Triage Mode</h1>
@@ -199,7 +280,7 @@ export const Prioritise = () => {
                 setCurrentIndex(0);
               }}
             >
-              <option value="value">Value (P/D)</option>
+              <option value="value">Impact (P/D)</option>
               <option value="priority">Priority</option>
               <option value="difficulty">Difficulty</option>
             </select>
@@ -234,36 +315,46 @@ export const Prioritise = () => {
          )}
       </div>
 
-      <div className="relative w-full aspect-[3/4] perspective-1000">
-        <AnimatePresence mode="wait">
-          <motion.div
-            key={currentCard.id}
-            initial={{ scale: 0.8, opacity: 0, y: 20 }}
-            animate={{ 
-              scale: 1, 
-              opacity: 1, 
-              y: 0,
-              x: direction * 400,
-              rotate: direction * 20
-            }}
-            exit={{ scale: 0.8, opacity: 0 }}
-            transition={{ type: 'spring', damping: 25, stiffness: 400 }}
-            className="w-full h-full cursor-grab active:cursor-grabbing"
-          >
-            <div className="h-full shadow-2xl overflow-hidden border-2 border-primary/10 rounded-[2.5rem] relative">
-              {currentCard.deferredCount > 3 && (
-                <div className="absolute top-4 right-4 z-10">
-                   <span className="badge badge-warning badge-sm font-black py-3 px-4 shadow-lg border-none animate-bounce">NEGLECTED</span>
-                </div>
-              )}
-              <CardComponent 
-                card={currentCard} 
-                showActions={false} 
-                onClick={() => setEditingCard(currentCard)}
-              />
-            </div>
-          </motion.div>
-        </AnimatePresence>
+      <div className="relative w-full flex-1 min-h-0 flex flex-col mx-auto">
+        <div className="flex-1 min-h-0 flex flex-col perspective-1000">
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={currentCard.id}
+              initial={{ scale: 0.8, opacity: 0, y: 20 }}
+              animate={{
+                scale: 1,
+                opacity: 1,
+                y: 0,
+                x: direction * 400 + dragOffset,
+                rotate: direction * 20 + (dragOffset !== 0 ? dragOffset * 0.03 : 0)
+              }}
+              exit={{ scale: 0.8, opacity: 0 }}
+              transition={{ type: 'spring', damping: 25, stiffness: 400 }}
+              className="w-full h-full min-h-0 flex flex-col cursor-grab active:cursor-grabbing touch-none"
+              style={{ touchAction: 'none' }}
+              onPointerDown={handlePointerDown}
+              onPointerMove={handlePointerMove}
+              onPointerUp={handlePointerUp}
+              onPointerCancel={handlePointerCancel}
+            >
+              <div className="h-full min-h-0 flex flex-col shadow-2xl overflow-hidden border-2 border-primary/10 rounded-[2.5rem] relative bg-base-100 pointer-events-auto">
+                {currentCard.deferredCount > 3 && (
+                  <div className="absolute top-4 right-4 z-10">
+                    <span className="badge badge-warning badge-sm font-black py-3 px-4 shadow-lg border-none animate-bounce">NEGLECTED</span>
+                  </div>
+                )}
+                <CardComponent
+                  card={currentCard}
+                  statuses={statuses}
+                  variant="triage"
+                  fillHeight
+                  showActions={false}
+                  onClick={handleCardClick}
+                />
+              </div>
+            </motion.div>
+          </AnimatePresence>
+        </div>
       </div>
 
       <div className="flex gap-8 items-center pt-4">
@@ -301,6 +392,54 @@ export const Prioritise = () => {
           onUpdated={fetchData}
           onDeleted={fetchData}
         />
+      )}
+
+      {swapPrompt && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-base-content/30 backdrop-blur-sm" onClick={() => setSwapPrompt(null)} role="dialog" aria-modal="true">
+          <div className="bg-base-100 border border-base-content/10 shadow-2xl rounded-2xl p-6 max-w-md w-full space-y-4" onClick={e => e.stopPropagation()}>
+            <h3 className="font-black text-lg">Focus slot is in use</h3>
+            <p className="text-sm opacity-80">
+              &ldquo;{swapPrompt.currentDoing.title}&rdquo; is already in Focus. Mark it done or later so this task can take its place.
+            </p>
+            <div className="flex flex-col gap-2">
+              <button
+                type="button"
+                className="btn btn-primary w-full"
+                onClick={async () => {
+                  const doneStatus = statuses.find(s => s.category === 'done');
+                  const maybeStatus = statuses.find(s => s.category === 'maybe');
+                  if (!doneStatus || !maybeStatus) return;
+                  await apiClient.updateCard(swapPrompt.currentDoing.id, { statusId: doneStatus.id });
+                  await apiClient.updateCard(swapPrompt.cardToFocus.id, { statusId: statuses.find(s => s.category === 'doing')!.id });
+                  setSwapPrompt(null);
+                  await fetchData();
+                  navigate(`/boards/${boardId}/execute`);
+                }}
+              >
+                Mark done, then focus this
+              </button>
+              <button
+                type="button"
+                className="btn btn-ghost border border-base-content/20 w-full"
+                onClick={async () => {
+                  const maybeStatus = statuses.find(s => s.category === 'maybe');
+                  const doingStatus = statuses.find(s => s.category === 'doing');
+                  if (!maybeStatus || !doingStatus) return;
+                  await apiClient.updateCard(swapPrompt.currentDoing.id, { statusId: maybeStatus.id });
+                  await apiClient.updateCard(swapPrompt.cardToFocus.id, { statusId: doingStatus.id });
+                  setSwapPrompt(null);
+                  await fetchData();
+                  navigate(`/boards/${boardId}/execute`);
+                }}
+              >
+                Move to Backlog, then focus this
+              </button>
+              <button type="button" className="btn btn-ghost btn-sm w-full opacity-60" onClick={() => setSwapPrompt(null)}>
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

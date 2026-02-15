@@ -62,7 +62,7 @@ export const Execute = () => {
 
     try {
       const maybeStatus = statuses.find(s => s.category === 'maybe');
-      if (!maybeStatus) throw new Error('No "Maybe" status found');
+      if (!maybeStatus) throw new Error('No "Backlog" status found');
 
       await apiClient.updateCard(activeCard.id, { statusId: maybeStatus.id });
       setActiveCard(null);
@@ -81,8 +81,8 @@ export const Execute = () => {
   }
 
   return (
-    <div className="max-w-4xl mx-auto space-y-8 animate-in fade-in duration-500">
-      <div className="flex justify-between items-center">
+    <div className="w-full max-w-4xl lg:max-w-5xl xl:max-w-6xl mx-auto flex flex-1 flex-col min-h-0 animate-in fade-in duration-500">
+      <div className="flex justify-between items-center shrink-0">
         <div>
           <h1 className="text-sm font-black uppercase tracking-[0.3em] opacity-30">Focus Mode</h1>
           <p className="text-2xl font-black text-base-content">Current Task</p>
@@ -91,17 +91,19 @@ export const Execute = () => {
       </div>
 
       {!activeCard ? (
-        <div className="flex flex-col items-center justify-center p-20 bg-base-100 rounded-[2rem] border-2 border-dashed border-base-300 space-y-4">
+        <div className="flex flex-1 flex-col items-center justify-center p-20 bg-base-100 rounded-[2rem] border-2 border-dashed border-base-300 space-y-4">
            <p className="text-xl font-bold opacity-30 uppercase tracking-widest text-base-content">Nothing in progress</p>
            <button onClick={() => navigate(`/boards/${boardId}/prioritise`)} className="btn btn-primary text-white px-8">Start Triage</button>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-           <div className="md:col-span-2">
-              <div className="shadow-2xl border-none p-4 bg-base-100 rounded-[1.5rem]">
-                <CardComponent 
-                  card={activeCard} 
-                  showActions={false} 
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-8 flex-1 min-h-0 mt-6">
+           <div className="md:col-span-2 min-h-[60vh] lg:min-h-0 flex-1 flex flex-col min-h-0">
+              <div className="flex-1 min-h-0 flex flex-col shadow-2xl border-2 border-primary/10 rounded-[2.5rem] overflow-hidden bg-base-100">
+                <CardComponent
+                  card={activeCard}
+                  statuses={statuses}
+                  fillHeight
+                  showActions={false}
                 />
               </div>
            </div>

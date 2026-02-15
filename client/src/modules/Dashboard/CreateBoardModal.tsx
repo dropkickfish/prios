@@ -37,8 +37,8 @@ export const CreateBoardModal: React.FC<CreateBoardModalProps> = ({ onClose, onC
   };
 
   return (
-    <div className="modal modal-open bg-base-300/60 backdrop-blur-sm">
-      <div className="modal-box max-w-lg border border-base-content/10 shadow-2xl rounded-3xl p-8 bg-base-100">
+    <div className="modal modal-open bg-base-300/60 backdrop-blur-sm" onClick={onClose} role="dialog" aria-modal="true">
+      <div className="modal-box max-w-lg border border-base-content/10 shadow-2xl rounded-3xl p-8 bg-base-100" onClick={e => e.stopPropagation()}>
         <h3 className="text-3xl font-black mb-8 text-primary">New Board</h3>
         <form onSubmit={handleSubmit} className="space-y-6">
           <div className="space-y-2 mb-6">

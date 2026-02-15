@@ -13,9 +13,11 @@ interface CardDetailModalProps {
   onClose: () => void;
   onUpdated: (updatedCard?: CardType) => void;
   onDeleted: () => void;
+  /** When 'panel', slides in from the right so board stays visible; default 'modal' */
+  variant?: 'modal' | 'panel';
 }
 
-export const CardDetailModal: React.FC<CardDetailModalProps> = ({ card, board, statuses, allCards, onClose, onUpdated, onDeleted }) => {
+export const CardDetailModal: React.FC<CardDetailModalProps> = ({ card, board, statuses, allCards, onClose, onUpdated, onDeleted, variant = 'modal' }) => {
   const [formData, setFormData] = useState({
     title: card.title,
     description: card.description || '',
@@ -208,9 +210,22 @@ export const CardDetailModal: React.FC<CardDetailModalProps> = ({ card, board, s
     }
   };
 
+  const isPanel = variant === 'panel';
   return (
-    <div className="modal modal-open z-[50]">
-      <div className="modal-box bg-base-100 border border-base-content/10 shadow-2xl max-w-5xl w-full lg:w-[90%] p-0 overflow-hidden rounded-3xl max-h-[90vh]">
+    <div
+      className={isPanel ? 'fixed inset-0 z-[50] flex justify-end bg-base-content/20' : 'modal modal-open z-[50] bg-base-300/60 backdrop-blur-sm'}
+      onClick={onClose}
+      role="dialog"
+      aria-modal="true"
+    >
+      <div
+        className={
+          isPanel
+            ? 'bg-base-100 border-l border-base-content/10 shadow-2xl max-w-lg w-full p-0 overflow-hidden rounded-l-3xl h-full overflow-y-auto'
+            : 'modal-box bg-base-100 border border-base-content/10 shadow-2xl max-w-5xl w-full lg:w-[90%] p-0 overflow-hidden rounded-3xl max-h-[90vh]'
+        }
+        onClick={e => e.stopPropagation()}
+      >
         {showEisenhower && (
           <EisenhowerMatrixHelper 
             onComplete={(res) => {
@@ -221,7 +236,7 @@ export const CardDetailModal: React.FC<CardDetailModalProps> = ({ card, board, s
           />
         )}
 
-        <div className="flex flex-col h-full max-h-[90vh]">
+        <div className={isPanel ? 'flex flex-col h-full' : 'flex flex-col h-full max-h-[90vh]'}>
           {/* Header */}
           <div className="p-8 pb-4 border-b border-base-content/10">
             <div className="space-y-2 w-full">
@@ -331,6 +346,11 @@ export const CardDetailModal: React.FC<CardDetailModalProps> = ({ card, board, s
                       onChange={(e) => setFormData({ ...formData, difficulty: parseInt(e.target.value) })}
                     />
                   </div>
+                </div>
+                <div className="pt-2 border-t border-base-content/10">
+                  <span className="text-[10px] font-black uppercase tracking-widest text-base-content/50">Impact score</span>
+                  <p className="text-lg font-black text-primary">{(formData.priority / formData.difficulty).toFixed(2)}</p>
+                  <p className="text-[9px] opacity-50">Priority ÷ difficulty — higher = more impact</p>
                 </div>
               </div>
 

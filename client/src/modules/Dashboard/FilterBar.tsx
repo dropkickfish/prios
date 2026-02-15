@@ -1,35 +1,46 @@
 import { useState, useRef, useEffect } from 'react';
-import { useShortcut } from '../../context/KeyboardContext';
 import { useKeyboard } from '../../context/KeyboardContext';
 
 interface FilterBarProps {
+  value: string;
   onFilterChange: (text: string) => void;
+  onClose?: () => void;
+  focusOnOpen?: boolean;
 }
 
-export const FilterBar = ({ onFilterChange }: FilterBarProps) => {
-  const [filterText, setFilterText] = useState('');
+export const FilterBar = ({ value, onFilterChange, onClose, focusOnOpen }: FilterBarProps) => {
   const [isExpanded, setIsExpanded] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const { shortcuts } = useKeyboard();
 
   useEffect(() => {
+    if (focusOnOpen && inputRef.current) {
+      inputRef.current.focus();
+    }
+  }, [focusOnOpen]);
+
+  useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && isExpanded) {
-        setIsExpanded(false);
+      if (e.key === 'Escape') {
+        if (isExpanded) {
+          setIsExpanded(false);
+        } else {
+          onClose?.();
+        }
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isExpanded]);
-
-  useShortcut('filter', () => {
-    inputRef.current?.focus();
-  });
+  }, [isExpanded, onClose]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const text = e.target.value;
-    setFilterText(text);
-    onFilterChange(text);
+    onFilterChange(e.target.value);
+  };
+
+  const handleBlur = () => {
+    if (value === '') {
+      onClose?.();
+    }
   };
 
   return (
@@ -43,8 +54,10 @@ export const FilterBar = ({ onFilterChange }: FilterBarProps) => {
                type="text" 
                placeholder={`Filter these cards... [${shortcuts.filter.key.toUpperCase()}]`}
                className="bg-transparent border-none outline-none w-full h-full text-sm font-bold placeholder:opacity-40"
-               value={filterText}
+               value={value}
                onChange={handleChange}
+               onBlur={handleBlur}
+               data-filter-input
              />
              
              <div className="h-4 w-px bg-base-content/10 mx-1"></div>
@@ -52,6 +65,8 @@ export const FilterBar = ({ onFilterChange }: FilterBarProps) => {
              <button 
                onClick={() => setIsExpanded(!isExpanded)}
                className={`btn btn-ghost btn-circle btn-xs transition-colors ${isExpanded ? 'bg-base-content/10' : ''}`}
+               type="button"
+               title="Filter options"
              >
                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                  <line x1="4" y1="21" x2="4" y2="14"></line><line x1="4" y1="10" x2="4" y2="3"></line>
@@ -61,6 +76,11 @@ export const FilterBar = ({ onFilterChange }: FilterBarProps) => {
                  <line x1="17" y1="16" x2="23" y2="16"></line>
                </svg>
              </button>
+             {onClose && (
+               <button type="button" onClick={onClose} className="btn btn-ghost btn-circle btn-xs" title="Close filter">
+                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+               </button>
+             )}
           </div>
 
           {/* Expanded Options */}

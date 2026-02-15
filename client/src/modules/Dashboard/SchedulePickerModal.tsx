@@ -72,8 +72,8 @@ export const SchedulePickerModal: React.FC<SchedulePickerModalProps> = ({ card, 
   };
 
   return (
-    <div className="modal modal-open z-[100]">
-      <div className="modal-box bg-base-100 border border-base-content/10 shadow-2xl max-w-lg rounded-3xl p-8 max-h-[90vh] overflow-y-auto">
+    <div className="modal modal-open z-[100]" onClick={onClose} role="dialog" aria-modal="true">
+      <div className="modal-box bg-base-100 border border-base-content/10 shadow-2xl max-w-lg rounded-3xl p-8 max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
         <h3 className="text-2xl font-black text-primary mb-2">Schedule Task</h3>
         <p className="text-xs uppercase font-black tracking-widest opacity-40 mb-8 leading-tight">"{card.title}"</p>
         <div className="space-y-2 mb-8">

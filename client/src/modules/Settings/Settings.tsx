@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { apiClient } from '../../api/client';
 import { ThemeController } from '../../components/ThemeController';
 import { KeyboardSettings } from './KeyboardSettings';
+import { TriageSettings } from './TriageSettings';
 
 export const Settings = () => {
   const [connected, setConnected] = useState(false);
@@ -94,6 +95,8 @@ export const Settings = () => {
       </section>
 
       <KeyboardSettings />
+
+      <TriageSettings />
 
       <section className="card bg-base-100 shadow-xl border border-base-200 p-8 opacity-40 grayscale pointer-events-none">
         <h2 className="text-xl font-black mb-6 flex items-center gap-2">
