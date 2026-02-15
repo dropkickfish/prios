@@ -4,7 +4,7 @@
  */
 import { describe, it, expect, beforeAll } from 'vitest';
 
-const API_BASE = 'http://localhost:3000';
+const API_BASE = 'http://0.0.0.0:3000';
 let serverAvailable = false;
 
 beforeAll(async () => {

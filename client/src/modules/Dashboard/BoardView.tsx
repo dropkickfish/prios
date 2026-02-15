@@ -254,10 +254,18 @@ export const BoardView = () => {
       await apiClient.updateCard(focusConflict.currentDoing.id, { statusId: targetStatusId });
       await apiClient.updateCard(focusConflict.cardToMove.id, { statusId: doingStatus.id });
       setFocusConflict(null);
-      fetchData();
+      await fetchData();
     } catch (err: unknown) {
       alert(err instanceof Error ? err.message : 'Failed to update');
     }
+  };
+
+  const focusConflictDesc = (card: CardType) => {
+    if (!card.description) return '';
+    const raw = typeof card.description === 'string'
+      ? card.description.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()
+      : (card.description as { content?: Array<{ content?: Array<{ text?: string }> }> })?.content?.flatMap(n => (n.content ?? []).map(c => c.text ?? '')).join(' ') ?? '';
+    return raw.slice(0, 140) + (raw.length > 140 ? '…' : '');
   };
 
   const handleSchedule = (card: CardType) => {
@@ -311,16 +319,6 @@ export const BoardView = () => {
     }
   };
 
-  const getCategoryOrder = (category: string) => {
-    switch (category) {
-      case 'maybe': return 1;
-      case 'doing': return 2;
-      case 'scheduled': return 3;
-      case 'done': return 4;
-      default: return 99;
-    }
-  };
-
   const doingStatus = statuses.find(s => s.category === 'doing');
   const scheduledStatus = statuses.find(s => s.category === 'scheduled');
   const backlogCollapsed = collapsedCategories.includes('maybe') && collapsedCategories.includes('scheduled');
@@ -335,13 +333,6 @@ export const BoardView = () => {
   }
 
   if (!board) return <div>Board not found.</div>;
-
-  const sortedStatuses = [...statuses].sort((a, b) => {
-     const orderA = getCategoryOrder(a.category);
-     const orderB = getCategoryOrder(b.category);
-     if (orderA !== orderB) return orderA - orderB;
-     return a.order - b.order;
-  });
 
   return (
     <div className="flex flex-col flex-1 min-h-0 space-y-6">
@@ -359,17 +350,33 @@ export const BoardView = () => {
         />
       )}
       {focusConflict && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-base-content/30 backdrop-blur-sm" onClick={() => setFocusConflict(null)} role="dialog" aria-modal="true">
-          <div className="bg-base-100 border border-base-content/10 shadow-2xl rounded-2xl p-6 max-w-md w-full space-y-4" onClick={e => e.stopPropagation()}>
-            <h3 className="font-black text-lg">FOCUS slot is in use</h3>
-            <p className="text-sm opacity-80">
-              &ldquo;{focusConflict.currentDoing.title}&rdquo; is already in FOCUS. Mark it done or move to Backlog so this task can take its place.
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-2 sm:p-4 bg-base-content/30 backdrop-blur-sm" onClick={() => setFocusConflict(null)} role="dialog" aria-modal="true">
+          <div className="bg-base-100 border border-base-content/10 shadow-2xl rounded-2xl p-4 sm:p-5 max-w-md w-full max-h-[90vh] flex flex-col min-h-0" onClick={e => e.stopPropagation()}>
+            <h3 className="font-black text-base sm:text-lg shrink-0">FOCUS slot is in use</h3>
+            <p className="text-xs sm:text-sm opacity-80 shrink-0 mt-1">
+              Mark the current task done or move to Backlog so this task can take its place.
             </p>
-            <div className="flex flex-col gap-2">
-              <button type="button" className="btn btn-primary w-full" onClick={() => resolveFocusConflict('done')}>
+            <div className="flex flex-col gap-2 min-h-0 flex-1 overflow-y-auto py-2">
+              <div className="rounded-xl bg-base-200/60 p-3 border border-base-content/10">
+                <p className="text-[10px] font-bold uppercase tracking-widest opacity-50">Currently in focus</p>
+                <p className="font-bold text-sm mt-0.5 line-clamp-1">{focusConflict.currentDoing.title}</p>
+                {focusConflictDesc(focusConflict.currentDoing) && (
+                  <p className="text-xs opacity-70 mt-1 line-clamp-2">{focusConflictDesc(focusConflict.currentDoing)}</p>
+                )}
+              </div>
+              <div className="rounded-xl bg-primary/10 border border-primary/20 p-3">
+                <p className="text-[10px] font-bold uppercase tracking-widest text-primary">Task to move here</p>
+                <p className="font-bold text-sm mt-0.5 line-clamp-1">{focusConflict.cardToMove.title}</p>
+                {focusConflictDesc(focusConflict.cardToMove) && (
+                  <p className="text-xs opacity-70 mt-1 line-clamp-2">{focusConflictDesc(focusConflict.cardToMove)}</p>
+                )}
+              </div>
+            </div>
+            <div className="flex flex-col gap-2 shrink-0 pt-2">
+              <button type="button" className="btn btn-primary w-full btn-sm sm:btn-md" onClick={() => resolveFocusConflict('done')}>
                 Mark done, then move this here
               </button>
-              <button type="button" className="btn btn-ghost border border-base-content/20 w-full" onClick={() => resolveFocusConflict('later')}>
+              <button type="button" className="btn btn-ghost border border-base-content/20 w-full btn-sm sm:btn-md" onClick={() => resolveFocusConflict('later')}>
                 Move to Backlog, then move this here
               </button>
               <button type="button" className="btn btn-ghost btn-sm w-full opacity-60" onClick={() => setFocusConflict(null)}>Cancel</button>

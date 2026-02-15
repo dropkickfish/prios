@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import type { CardType, StatusType } from '../../types';
+import type { CardType } from '../../types';
 
 type TimeBucket = 'today' | 'tomorrow' | 'week';
 

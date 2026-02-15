@@ -4,6 +4,9 @@ export const boards = sqliteTable('boards', {
     id: text('id').primaryKey().$defaultFn(() => uuidv4()),
     name: text('name').notNull(),
     availabilitySchedule: text('availability_schedule', { mode: 'json' }).notNull(), // JSON: { mon: ["09:00-17:00"], ... }
+    order: integer('order').notNull().default(0),
+    colour: text('colour'),
+    schedulingWindowDays: integer('scheduling_window_days').default(3).notNull(),
 });
 export const statuses = sqliteTable('statuses', {
     id: text('id').primaryKey().$defaultFn(() => uuidv4()),
@@ -21,6 +24,20 @@ export const cards = sqliteTable('cards', {
     difficulty: integer('difficulty').notNull(), // 1-5
     priority: integer('priority').notNull(), // 1-5
     scheduledAt: integer('scheduled_at', { mode: 'timestamp' }),
+    externalEventId: text('external_event_id'),
+    deferredCount: integer('deferred_count').default(0).notNull(),
+    statusChangedAt: integer('status_changed_at', { mode: 'timestamp' }),
+});
+export const tags = sqliteTable('tags', {
+    id: text('id').primaryKey().$defaultFn(() => uuidv4()),
+    boardId: text('board_id').notNull().references(() => boards.id, { onDelete: 'cascade' }),
+    name: text('name').notNull(),
+    colour: text('colour'), // e.g., 'primary', 'secondary', etc. (daisyUI colours)
+});
+export const cardTags = sqliteTable('card_tags', {
+    id: text('id').primaryKey().$defaultFn(() => uuidv4()),
+    cardId: text('card_id').notNull().references(() => cards.id),
+    tagId: text('tag_id').notNull().references(() => tags.id),
 });
 export const cardUpdates = sqliteTable('card_updates', {
     id: text('id').primaryKey().$defaultFn(() => uuidv4()),
@@ -45,6 +62,7 @@ export const userStats = sqliteTable('user_stats', {
     prioritySum: integer('priority_sum').default(0),
     completedCount: integer('completed_count').default(0),
     abandonedCount: integer('abandoned_count').default(0),
+    skippedCount: integer('skipped_count').default(0),
     isDayOff: integer('is_day_off', { mode: 'boolean' }).default(false),
 });
 export const appSettings = sqliteTable('app_settings', {

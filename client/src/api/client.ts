@@ -1,6 +1,7 @@
 import type { CardType } from '../types';
 
-const API_BASE = 'http://localhost:3000/api';
+/** Use relative path so dev proxy and production same-origin both work. */
+const API_BASE = '/api';
 
 export const apiClient = {
   getBoards: async () => {
@@ -62,7 +63,9 @@ export const apiClient = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(updates),
     });
-    return res.json();
+    const data = await res.json();
+    if (!res.ok) throw new Error((data as { error?: string }).error || 'Failed to update card');
+    return data;
   },
   deleteCard: async (cardId: string) => {
     const res = await fetch(`${API_BASE}/cards/${cardId}`, {

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # API smoke test. Run with server on http://localhost:3000
 set -e
-BASE="${BASE_URL:-http://localhost:3000}"
+BASE="${BASE_URL:-http://0.0.0.0:3000}"
 echo "Smoke testing $BASE ..."
 curl -sf "$BASE/health" | grep -q '"status":"ok"' || (echo "FAIL: /health"; exit 1)
 echo "  /health OK"

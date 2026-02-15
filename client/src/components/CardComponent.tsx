@@ -1,21 +1,11 @@
 import type { CardType, StatusType } from '../types';
+import { TipTapViewer } from './TipTapViewer';
 
 /** Escape HTML for safe insertion. */
 function escapeHtml(text: string): string {
   const div = document.createElement('div');
   div.textContent = text;
   return div.innerHTML;
-}
-
-/** Plain text with newlines only (for fallback). */
-function stripHtmlForPreview(html: string): string {
-  if (!html || typeof html !== 'string') return '';
-  return html
-    .replace(/<br\s*\/?>/gi, '\n')
-    .replace(/<\/p>/gi, '\n')
-    .replace(/<[^>]+>/g, '')
-    .replace(/\n+/g, ' ')
-    .trim();
 }
 
 /** Sanitize HTML: allow only p, br, strong, em, b, i, a[href]. Strip script/style and remove leading ">" from blockquote-style lines. */
@@ -31,7 +21,7 @@ function sanitizeHtmlForPreview(html: string): string {
     .replace(/<br\s*\/?>/gi, '\n');
   out = out.split('\n').map((line) => line.replace(/^>\s?/, '')).join('\n');
   const allowed = /^(a|strong|em|b|i)$/i;
-  out = out.replace(/<([a-z][a-z0-9]*)\b([^>]*)>|<\/([a-z][a-z0-9]*)>/gi, (match, openTag, attrs, closeTag) => {
+  out = out.replace(/<([a-z][a-z0-9]*)\b([^>]*)>|<\/([a-z][a-z0-9]*)>/gi, (_match, openTag, attrs, closeTag) => {
     const tag = (openTag || closeTag || '').toLowerCase();
     if (!allowed.test(tag)) return '';
     if (closeTag) return `</${tag}>`;
@@ -86,9 +76,11 @@ interface CardComponentProps {
   fillHeight?: boolean;
   /** When true, description is line-clamped on mobile (ellipsis) so Focus card doesn't dominate; desktop unchanged. */
   constrainDescriptionOnMobile?: boolean;
+  /** When true (e.g. Focus mode), show full description with formatting and multimedia, not a preview. */
+  showFullDescription?: boolean;
 }
 
-export const CardComponent = ({ card, statuses, onStatusChange, onClick, onSchedule, showActions = false, variant = 'default', fillHeight = false, constrainDescriptionOnMobile = false }: CardComponentProps) => {
+export const CardComponent = ({ card, statuses, onStatusChange, onClick, onSchedule, showActions = false, variant = 'default', fillHeight = false, constrainDescriptionOnMobile = false, showFullDescription = false }: CardComponentProps) => {
   const getDifficultyColor = (difficulty: number) => {
     const colours = ['text-success', 'text-info', 'text-warning', 'text-error', 'text-error font-bold'];
     return colours[difficulty - 1] || 'text-base-content';
@@ -109,7 +101,7 @@ export const CardComponent = ({ card, statuses, onStatusChange, onClick, onSched
       className={`card bg-base-100 shadow-sm hover:shadow-md transition-all cursor-pointer border border-base-content/5 group/card ${useFullHeight ? 'h-full flex flex-col min-h-0' : ''}`}
       onClick={() => onClick?.(card.id)}
     >
-      <div className={`card-body flex flex-col min-h-0 ${useFullHeight ? 'flex-1 p-8 gap-4' : 'gap-3'} ${compact ? 'p-3' : !useFullHeight ? 'p-4' : ''}`}>
+      <div className={`card-body flex flex-col min-h-0 ${useFullHeight ? 'flex-1 p-4 md:p-6 gap-3' : 'gap-3'} ${compact ? 'p-3' : !useFullHeight ? 'p-4' : ''}`}>
         <div className="flex justify-between items-start gap-2">
           <h3 className="card-title text-base font-bold leading-tight">{card.title}</h3>
           {compact && impactScore !== null && (
@@ -138,7 +130,7 @@ export const CardComponent = ({ card, statuses, onStatusChange, onClick, onSched
         </div>
 
         {showSummaryBlock && (
-          <div className={`flex flex-col ${useFullHeight ? 'flex-1 min-h-0 overflow-hidden' : 'gap-3 mt-1'}`}>
+          <div className={`flex flex-col ${useFullHeight ? 'flex-1 min-h-0 overflow-y-auto' : 'gap-3 mt-1'}`}>
             {useFullHeight && variant === 'triage' ? (
               <>
                 <div className="flex-1 min-h-0 overflow-y-auto flex flex-col gap-4 pr-1">
@@ -182,15 +174,27 @@ export const CardComponent = ({ card, statuses, onStatusChange, onClick, onSched
             ) : (
               <>
                 {card.description && (() => {
+                  const isFullHtml = isDoing && showFullDescription && typeof card.description === 'string';
+                  if (isFullHtml) {
+                    return (
+                      <div className={useFullHeight ? 'flex flex-col min-h-0 shrink-0' : ''}>
+                        <p className="text-[10px] font-bold uppercase tracking-widest opacity-50 mb-1">Description</p>
+                        <TipTapViewer
+                          content={card.description as string}
+                          className="text-sm opacity-90 leading-relaxed break-words"
+                        />
+                      </div>
+                    );
+                  }
                   const html = getDescriptionPreviewHtml(card.description);
                   if (!html) return null;
-                  const mobileClampClass = constrainDescriptionOnMobile ? 'line-clamp-6 md:line-clamp-none overflow-hidden md:overflow-y-auto md:min-h-0 md:flex-1' : '';
+                  const mobileClampClass = constrainDescriptionOnMobile ? 'line-clamp-6 md:line-clamp-none' : '';
                   const backlogClamp = variant === 'backlog' ? 'line-clamp-2 overflow-hidden' : '';
                   return (
-                    <div className={useFullHeight ? 'flex-1 min-h-0 flex flex-col overflow-hidden' : ''}>
-                      <p className="text-[10px] font-bold uppercase tracking-widest opacity-50 mb-0.5 shrink-0">Description</p>
+                    <div className={useFullHeight ? 'flex flex-col min-h-0 shrink-0' : ''}>
+                      <p className="text-[10px] font-bold uppercase tracking-widest opacity-50 mb-1">Description</p>
                       <div
-                        className={`text-sm opacity-80 leading-relaxed break-words prose prose-sm max-w-none dark:prose-invert prose-p:my-1 prose-p:first:mt-0 ${mobileClampClass} ${backlogClamp} ${useFullHeight && !constrainDescriptionOnMobile ? 'overflow-y-auto min-h-0 flex-1' : variant === 'triage' ? 'line-clamp-3' : ''}`}
+                        className={`text-sm opacity-80 leading-relaxed break-words prose prose-sm max-w-none dark:prose-invert prose-p:my-1 prose-p:first:mt-0 ${mobileClampClass} ${backlogClamp} ${variant === 'triage' ? 'line-clamp-3' : ''}`}
                         dangerouslySetInnerHTML={{ __html: html }}
                       />
                     </div>
@@ -215,9 +219,11 @@ export const CardComponent = ({ card, statuses, onStatusChange, onClick, onSched
                     ))}
                   </div>
                 )}
-                <p className={`text-[10px] opacity-40 pt-1 border-t border-base-content/5 shrink-0 ${useFullHeight && isDoing ? 'mt-auto' : ''}`}>
-                  Click to open full details
-                </p>
+                {!showFullDescription && (
+                  <p className={`text-[10px] opacity-40 pt-1 border-t border-base-content/5 shrink-0 ${useFullHeight && isDoing ? 'mt-auto' : ''}`}>
+                    Click to open full details
+                  </p>
+                )}
               </>
             )}
           </div>

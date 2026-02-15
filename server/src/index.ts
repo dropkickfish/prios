@@ -1,12 +1,17 @@
 import Fastify from 'fastify';
+import path from 'path';
 import { drizzle } from 'drizzle-orm/better-sqlite3';
 import Database from 'better-sqlite3';
 import * as schema from './schema.js';
 import { eq, and, or, desc, isNotNull, inArray } from 'drizzle-orm';
 import dotenv from 'dotenv';
 import cors from '@fastify/cors';
+import fastifyStatic from '@fastify/static';
 import { DAVClient } from 'tsdav';
 dotenv.config();
+
+const PORT = Number(process.env.PORT) || 3000;
+const PUBLIC_DIR = process.env.PUBLIC_DIR ? path.resolve(process.env.PUBLIC_DIR) : null;
 
 // Note: We use manual fetch for OAuth code exchange since we removed googleapis
 const GOOGLE_AUTH_ENDPOINT = 'https://oauth2.googleapis.com';
@@ -1264,9 +1269,20 @@ fastify.post('/api/calendar/sync', async (request) => {
   return { synced, moved, deleted };
 });
 
+// Production: serve built client and SPA fallback (must be after all /api and /health routes)
+if (PUBLIC_DIR) {
+  await fastify.register(fastifyStatic, { root: PUBLIC_DIR });
+  fastify.setNotFoundHandler((request, reply) => {
+    if (request.method === 'GET' && !request.url.startsWith('/api') && !request.url.startsWith('/health')) {
+      return reply.sendFile('index.html');
+    }
+    reply.code(404).send();
+  });
+}
+
 const start = async () => {
   try {
-    await fastify.listen({ port: 3000, host: '0.0.0.0' });
+    await fastify.listen({ port: PORT, host: '0.0.0.0' });
   } catch (err) {
     fastify.log.error(err);
     process.exit(1);

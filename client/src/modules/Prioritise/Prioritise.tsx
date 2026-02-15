@@ -186,6 +186,14 @@ export const Prioritise = () => {
     setCurrentIndex(0); // Reset session
   };
 
+  const swapPromptDesc = (card: CardType) => {
+    if (!card.description) return '';
+    const raw = typeof card.description === 'string'
+      ? card.description.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()
+      : (card.description as { content?: Array<{ content?: Array<{ text?: string }> }> })?.content?.flatMap(n => (n.content ?? []).map(c => c.text ?? '')).join(' ') ?? '';
+    return raw.slice(0, 140) + (raw.length > 140 ? '…' : '');
+  };
+
   const SWIPE_THRESHOLD = 80;
   const DRAG_CAP = 120;
 
@@ -395,41 +403,65 @@ export const Prioritise = () => {
       )}
 
       {swapPrompt && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-base-content/30 backdrop-blur-sm" onClick={() => setSwapPrompt(null)} role="dialog" aria-modal="true">
-          <div className="bg-base-100 border border-base-content/10 shadow-2xl rounded-2xl p-6 max-w-md w-full space-y-4" onClick={e => e.stopPropagation()}>
-            <h3 className="font-black text-lg">Focus slot is in use</h3>
-            <p className="text-sm opacity-80">
-              &ldquo;{swapPrompt.currentDoing.title}&rdquo; is already in Focus. Mark it done or later so this task can take its place.
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-2 sm:p-4 bg-base-content/30 backdrop-blur-sm" onClick={() => setSwapPrompt(null)} role="dialog" aria-modal="true">
+          <div className="bg-base-100 border border-base-content/10 shadow-2xl rounded-2xl p-4 sm:p-5 max-w-md w-full max-h-[90vh] flex flex-col min-h-0" onClick={e => e.stopPropagation()}>
+            <h3 className="font-black text-base sm:text-lg shrink-0">Focus slot is in use</h3>
+            <p className="text-xs sm:text-sm opacity-80 shrink-0 mt-1">
+              Mark the current task done or move to Backlog so this task can take its place.
             </p>
-            <div className="flex flex-col gap-2">
+            <div className="flex flex-col gap-2 min-h-0 flex-1 overflow-y-auto py-2">
+              <div className="rounded-xl bg-base-200/60 p-3 border border-base-content/10">
+                <p className="text-[10px] font-bold uppercase tracking-widest opacity-50">Currently in focus</p>
+                <p className="font-bold text-sm mt-0.5 line-clamp-1">{swapPrompt.currentDoing.title}</p>
+                {swapPromptDesc(swapPrompt.currentDoing) && (
+                  <p className="text-xs opacity-70 mt-1 line-clamp-2">{swapPromptDesc(swapPrompt.currentDoing)}</p>
+                )}
+              </div>
+              <div className="rounded-xl bg-primary/10 border border-primary/20 p-3">
+                <p className="text-[10px] font-bold uppercase tracking-widest text-primary">Task to focus</p>
+                <p className="font-bold text-sm mt-0.5 line-clamp-1">{swapPrompt.cardToFocus.title}</p>
+                {swapPromptDesc(swapPrompt.cardToFocus) && (
+                  <p className="text-xs opacity-70 mt-1 line-clamp-2">{swapPromptDesc(swapPrompt.cardToFocus)}</p>
+                )}
+              </div>
+            </div>
+            <div className="flex flex-col gap-2 shrink-0 pt-2">
               <button
                 type="button"
-                className="btn btn-primary w-full"
+                className="btn btn-primary w-full btn-sm sm:btn-md"
                 onClick={async () => {
                   const doneStatus = statuses.find(s => s.category === 'done');
-                  const maybeStatus = statuses.find(s => s.category === 'maybe');
-                  if (!doneStatus || !maybeStatus) return;
-                  await apiClient.updateCard(swapPrompt.currentDoing.id, { statusId: doneStatus.id });
-                  await apiClient.updateCard(swapPrompt.cardToFocus.id, { statusId: statuses.find(s => s.category === 'doing')!.id });
-                  setSwapPrompt(null);
-                  await fetchData();
-                  navigate(`/boards/${boardId}/execute`);
+                  const doingStatus = statuses.find(s => s.category === 'doing');
+                  if (!doneStatus || !doingStatus) return;
+                  try {
+                    await apiClient.updateCard(swapPrompt.currentDoing.id, { statusId: doneStatus.id });
+                    await apiClient.updateCard(swapPrompt.cardToFocus.id, { statusId: doingStatus.id });
+                    setSwapPrompt(null);
+                    await fetchData();
+                    navigate(`/boards/${boardId}/execute`);
+                  } catch (err: unknown) {
+                    alert(err instanceof Error ? err.message : 'Failed to update');
+                  }
                 }}
               >
                 Mark done, then focus this
               </button>
               <button
                 type="button"
-                className="btn btn-ghost border border-base-content/20 w-full"
+                className="btn btn-ghost border border-base-content/20 w-full btn-sm sm:btn-md"
                 onClick={async () => {
                   const maybeStatus = statuses.find(s => s.category === 'maybe');
                   const doingStatus = statuses.find(s => s.category === 'doing');
                   if (!maybeStatus || !doingStatus) return;
-                  await apiClient.updateCard(swapPrompt.currentDoing.id, { statusId: maybeStatus.id });
-                  await apiClient.updateCard(swapPrompt.cardToFocus.id, { statusId: doingStatus.id });
-                  setSwapPrompt(null);
-                  await fetchData();
-                  navigate(`/boards/${boardId}/execute`);
+                  try {
+                    await apiClient.updateCard(swapPrompt.currentDoing.id, { statusId: maybeStatus.id });
+                    await apiClient.updateCard(swapPrompt.cardToFocus.id, { statusId: doingStatus.id });
+                    setSwapPrompt(null);
+                    await fetchData();
+                    navigate(`/boards/${boardId}/execute`);
+                  } catch (err: unknown) {
+                    alert(err instanceof Error ? err.message : 'Failed to update');
+                  }
                 }}
               >
                 Move to Backlog, then focus this
