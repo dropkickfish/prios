@@ -8,7 +8,7 @@ export const apiClient = {
     const res = await fetch(`${API_BASE}/boards`);
     return res.json();
   },
-  createBoard: async (data: { name: string; availabilitySchedule: any }) => {
+  createBoard: async (data: { name: string; availabilitySchedule: unknown }) => {
     const res = await fetch(`${API_BASE}/boards`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
