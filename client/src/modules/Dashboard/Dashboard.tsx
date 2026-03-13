@@ -61,10 +61,10 @@ const SortableBoardCard = ({ board, index, onEdit }: SortableBoardCardProps) => 
       {...attributes}
       {...listeners}
       onClick={() => navigate(`/boards/${board.id}`)}
-      className="group relative rounded-2xl border border-base-content/12 bg-base-100 transition-all hover:border-base-content/25 hover:shadow-sm cursor-pointer"
+      className="group relative rounded-xl border border-base-content/12 bg-base-100/80 transition-colors hover:border-base-content/25 cursor-pointer"
     >
       <div className="flex items-start gap-3 px-4 py-4 sm:px-5 sm:py-5">
-        <div className={`mt-1 h-10 w-1.5 rounded-full bg-${board.colour || 'secondary'} opacity-60`} aria-hidden />
+        <div className={`mt-1 h-10 w-1 bg-${board.colour || 'secondary'} opacity-60`} aria-hidden />
         <div className="min-w-0 flex-1">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
@@ -198,8 +198,8 @@ export const Dashboard = () => {
   const canCreateBoard = boards.length < MAX_BOARDS;
 
   return (
-    <div className="space-y-8 text-secondary-content">
-      <div className="max-w-4xl space-y-2">
+    <div className="mx-auto w-full max-w-6xl space-y-8 text-secondary-content">
+      <div className="space-y-2">
         <p className="text-[11px] uppercase tracking-[0.22em] font-bold text-base-content/50">Workspace</p>
         <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
           <div>
@@ -234,7 +234,7 @@ export const Dashboard = () => {
             items={boards.map(b => b.id)}
             strategy={rectSortingStrategy}
           >
-             <div className="grid grid-cols-1 gap-4 max-w-4xl text-base-content">
+           <div className="grid grid-cols-1 gap-3 text-base-content">
               {boards.map((board, index) => (
                 <SortableBoardCard
                   key={board.id}
@@ -244,7 +244,7 @@ export const Dashboard = () => {
                 />
               ))}
               {boards.length === 0 && (
-                <div className="col-span-full text-center p-16 bg-base-100 rounded-3xl border-2 border-dashed border-base-300 flex flex-col items-center gap-4">
+                <div className="col-span-full text-center p-16 bg-base-100/70 rounded-2xl border border-dashed border-base-content/25 flex flex-col items-center gap-4">
                   <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-12 h-12 opacity-20">
                     <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 13.5l10.5-11.25L12 10.5h8.25L9.75 21.75 12 13.5H3.75z" />
                   </svg>

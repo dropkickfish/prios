@@ -389,29 +389,29 @@ export const BoardView = () => {
           }}
         />
       )}
-      <div className="px-4 sm:px-6">
-        <div className="rounded-3xl border border-primary/20 bg-base-100/95 px-4 py-4 sm:px-5 sm:py-5 shadow-sm">
+      <div className="mx-auto flex w-full max-w-6xl flex-1 min-h-0 flex-col gap-4 px-4 sm:px-6">
+        <div className="border-b border-base-content/10 pb-4">
         <div className="flex flex-wrap justify-between items-start gap-x-6 gap-y-3">
           <div className="min-w-0 flex-1">
             <p className="text-[10px] uppercase tracking-[0.2em] text-primary/70 font-semibold mb-1">Execution board</p>
             <div className="flex items-center gap-2 flex-wrap">
               <BoardSwitcher currentBoard={board} onSwitch={(id) => navigate(`/boards/${id}`)} />
-              <button onClick={() => setShowSettingsModal(true)} className="btn btn-ghost btn-circle btn-sm w-11 h-11 min-h-11 shrink-0" title="Board settings">
+              <button onClick={() => setShowSettingsModal(true)} className="btn btn-ghost btn-circle btn-sm w-11 h-11 min-h-11 shrink-0 text-base-content/70 hover:text-base-content" title="Board settings">
                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87.074.04.147.083.22.127.324.196.72.257 1.075.124l1.217-.456a1.125 1.125 0 011.37.49l1.296 2.247a1.125 1.125 0 01-.26 1.431l-1.003.827c-.293.24-.438.613-.431.992a6.759 6.759 0 010 .255c-.007.378.138.75.43.99l1.005.828c.424.35.534.954.26 1.43l-1.298 2.247a1.125 1.125 0 01-1.369.491l-1.217-.456c-.355-.133-.75-.072-1.076.124a6.57 6.57 0 01-.22.128c-.331.183-.581.495-.644.869l-.213 1.28c-.09.543-.56.941-1.11.941h-2.594c-.55 0-1.02-.398-1.11-.94l-.213-1.281c-.062-.374-.312-.686-.644-.87a6.52 6.52 0 01-.22-.127c-.325-.196-.72-.257-1.076-.124l-1.217.456a1.125 1.125 0 01-1.369-.49l-1.297-2.247a1.125 1.125 0 01.26-1.431l1.004-.827c.292-.24.437-.613.43-.992a6.932 6.932 0 010-.255c.007-.378-.138-.75-.43-.99l-1.004-.828a1.125 1.125 0 01-.26-1.43l1.297-2.247a1.125 1.125 0 011.37-.491l1.216.456c.356.133.751.072 1.076-.124.072-.044.146-.087.22-.128.332-.183.582-.495.644-.869l.214-1.281z" />
                   <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                 </svg>
               </button>
             </div>
-            <div className="mt-2 inline-flex items-center gap-2 rounded-full bg-base-200 px-3 py-1.5 text-[11px] font-semibold tracking-wide text-base-content/70">
+            <div className="mt-2 inline-flex items-center gap-2 rounded-full bg-base-200/70 px-3 py-1.5 text-[11px] font-semibold tracking-wide text-base-content/75">
               <span className={`w-2 h-2 rounded-full animate-pulse bg-${board.colour || 'primary'}`}></span>
               {doingStatus && getCardsByStatus(doingStatus.id).length > 0 ? '1 task in focus' : 'Focus slot empty'}
             </div>
             <div className="mt-2 flex flex-wrap items-center gap-3 text-xs font-semibold">
-              <button type="button" onClick={() => navigate(`/boards/${boardId}/prioritise`)} className="text-primary hover:text-primary/80 transition-colors">
+              <button type="button" onClick={() => navigate(`/boards/${boardId}/prioritise`)} className="text-primary hover:text-primary/80 transition-colors font-bold">
                 Prioritise backlog
               </button>
-              <button type="button" onClick={openQuickAdd} className="text-base-content/65 hover:text-base-content transition-colors">
+              <button type="button" onClick={openQuickAdd} className="text-base-content/70 hover:text-base-content transition-colors">
                 Quick add task
               </button>
             </div>
@@ -448,9 +448,8 @@ export const BoardView = () => {
           </div>
         </div>
         </div>
-      </div>
 
-      <div className="flex-1 min-h-0 flex flex-col min-w-0 rounded-[2rem] border border-primary/20 bg-primary/[0.06] py-2">
+      <div className="flex-1 min-h-0 flex flex-col min-w-0 rounded-2xl border border-base-content/10 bg-base-100/80">
       <DndContext
         sensors={sensors}
         collisionDetection={closestCorners}
@@ -458,7 +457,7 @@ export const BoardView = () => {
         onDragEnd={handleDragEnd}
       >
       <div className="flex-1 min-h-0 overflow-y-auto">
-      <div className="space-y-4 px-4 sm:px-6 pb-32 md:pb-12 min-h-0">
+      <div className="space-y-4 px-4 py-4 sm:px-6 sm:py-5 pb-32 md:pb-12 min-h-0">
         {/* Scheduled: expandable calendar at top (all breakpoints; desktop defaults expanded) */}
         <ScheduleTimeStrip
             cards={cards}
@@ -489,16 +488,16 @@ export const BoardView = () => {
 
           {/* FOCUS: always visible at top — order-1 */}
           {doingStatus && (
-            <div className="order-1 flex-1 min-w-0 flex flex-col gap-3 px-2 w-full rounded-3xl border border-primary/25 bg-primary/[0.09] py-3">
+            <div className="order-1 flex-1 min-w-0 flex flex-col gap-3 px-2 w-full rounded-2xl border border-base-content/10 bg-base-100/70 py-3">
               <div className="flex items-center gap-3 px-3">
-                <div className="w-2 h-8 rounded-full bg-primary shadow-lg shadow-primary/30" />
+                <div className="w-1 h-8 rounded-full bg-primary" />
                 <h2 className="text-sm font-black uppercase tracking-[0.18em] text-primary">Focus lane</h2>
-                <span className="badge badge-primary badge-sm font-bold" title="One task at a time — swap or finish current to add another">1 slot</span>
+                <span className="badge badge-primary badge-sm font-bold" title="One task at a time - swap or finish current to add another">1 slot</span>
                 <span className="text-[11px] tracking-wide opacity-50 hidden sm:inline">Single-task mode</span>
               </div>
               <div className="flex-1 min-h-0 flex flex-col max-h-[45vh] md:max-h-none">
                 <DroppableColumn statusId={doingStatus.id} className="flex-1 min-h-0 overflow-hidden">
-                  <div className="min-h-0 flex-1 rounded-2xl border-2 border-primary/25 bg-base-100 p-4 flex flex-col overflow-y-auto">
+                  <div className="min-h-0 flex-1 rounded-xl border border-base-content/10 bg-base-100 p-4 flex flex-col overflow-y-auto">
                     {getCardsByStatus(doingStatus.id).map(card => (
                       <div key={card.id} className="flex-1 min-h-0 flex flex-col overflow-hidden">
                         <DraggableCard card={card}>
@@ -552,6 +551,7 @@ export const BoardView = () => {
       </DragOverlay>
       </DndContext>
       </div>
+      </div>
       {schedulingCard && (
         <SchedulePickerModal
           card={schedulingCard}
@@ -585,7 +585,7 @@ export const BoardView = () => {
               <button
                 type="button"
                 onClick={openQuickAdd}
-                className="btn btn-primary btn-circle shadow-lg shadow-primary/30 w-12 h-12 md:w-16 md:h-16 text-2xl border-0"
+                className="btn btn-primary btn-circle w-12 h-12 md:w-14 md:h-14 text-2xl border border-base-100/80 shadow-sm"
                 title={`New card (${shortcuts.new_card?.key ? shortcuts.new_card.key.toUpperCase() : 'N'})`}
               >
                 +

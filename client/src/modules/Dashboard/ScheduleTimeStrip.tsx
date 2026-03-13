@@ -102,12 +102,12 @@ export function ScheduleTimeStrip({
 
   return (
     <div
-      className={`rounded-3xl border border-info/20 bg-info/5 overflow-hidden w-full ${className}`}
+      className={`rounded-2xl border border-base-content/10 bg-base-100/60 overflow-hidden w-full ${className}`}
     >
         <button
           type="button"
           onClick={() => setScheduledExpanded((e) => !e)}
-          className="w-full min-h-[56px] flex items-center justify-between gap-3 px-4 py-3 hover:bg-base-200/60 transition-colors text-left"
+          className="w-full min-h-[56px] flex items-center justify-between gap-3 px-4 py-3 hover:bg-base-200/50 transition-colors text-left"
         >
           <div className="flex items-center gap-2 min-w-0">
             <span className="text-[11px] font-semibold tracking-wide text-base-content/80 min-w-0">
@@ -116,7 +116,7 @@ export function ScheduleTimeStrip({
             <span className="badge badge-sm badge-ghost font-bold">{totalScheduled}</span>
           </div>
           <div className="flex items-center gap-2 shrink-0">
-            <span className="text-[11px] tracking-wide text-base-content/65">{scheduledExpanded ? 'Tap to collapse' : 'Tap to expand'}</span>
+            <span className="text-[11px] tracking-wide text-base-content/75">{scheduledExpanded ? 'Tap to collapse' : 'Tap to expand'}</span>
             <svg
               xmlns="http://www.w3.org/2000/svg"
               width="16"
@@ -134,7 +134,7 @@ export function ScheduleTimeStrip({
           </div>
         </button>
         {scheduledExpanded && (
-          <div className="flex flex-col gap-4 px-4 pb-4 pt-5 border-t border-base-content/5 w-full">
+          <div className="flex flex-col gap-4 px-4 pb-4 pt-5 border-t border-base-content/10 w-full">
             {bucketBlock('Today', todayCards.length, todayCards, 'max-h-32')}
             {bucketBlock('Tomorrow', tomorrowCards.length, tomorrowCards, 'max-h-32')}
             {bucketBlock('This week', weekCards.length, weekCards, 'max-h-32')}
