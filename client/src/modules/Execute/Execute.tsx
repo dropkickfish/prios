@@ -85,7 +85,7 @@ export const Execute = () => {
       ) : (
         <>
           {/* Mobile: sticky action bar at bottom so buttons are always visible without scrolling */}
-          <div className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-base-100/95 backdrop-blur border-t border-base-content/10 p-3 flex gap-2 pb-[max(0.75rem,env(safe-area-inset-bottom,0px))]">
+          <div className="md:hidden fixed bottom-0 left-0 right-0 z-[60] bg-base-100/95 backdrop-blur border-t border-base-content/10 p-3 flex gap-2 pb-[max(0.75rem,env(safe-area-inset-bottom,0px))]">
             <button
               onClick={handleComplete}
               className="btn btn-primary flex-1 text-white shadow-lg"

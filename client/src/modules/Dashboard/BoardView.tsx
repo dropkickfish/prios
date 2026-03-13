@@ -6,7 +6,8 @@ import {
   DragOverlay,
   useSensor,
   useSensors,
-  PointerSensor,
+  MouseSensor,
+  TouchSensor,
   closestCorners,
   defaultDropAnimationSideEffects,
   type DragEndEvent,
@@ -44,7 +45,7 @@ const DraggableCard = ({ card, children }: DraggableCardProps) => {
   } : undefined;
 
   return (
-    <div ref={setNodeRef} style={style} {...listeners} {...attributes} className={`${isDragging ? 'opacity-30' : ''} touch-none`}>
+    <div ref={setNodeRef} style={style} {...listeners} {...attributes} className={isDragging ? 'opacity-30' : ''}>
       {children}
     </div>
   );
@@ -77,10 +78,11 @@ export const BoardView = () => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const sensors = useSensors(
-    useSensor(PointerSensor, {
-      activationConstraint: {
-        distance: 8,
-      },
+    useSensor(MouseSensor, {
+      activationConstraint: { distance: 8 },
+    }),
+    useSensor(TouchSensor, {
+      activationConstraint: { delay: 250, tolerance: 5 },
     })
   );
 
@@ -691,7 +693,7 @@ export const BoardView = () => {
         <>
           {/* + button: always visible when quick-add bar is closed (mobile + desktop) */}
           {!showQuickAddBar && (
-            <div className="fixed bottom-4 right-4 z-30 md:bottom-6 md:right-6">
+            <div className="fixed bottom-20 right-4 z-[60] md:bottom-6 md:right-6">
               <button
                 type="button"
                 onClick={openQuickAdd}
@@ -704,7 +706,7 @@ export const BoardView = () => {
           )}
           {/* Slide-up "What needs doing" panel — visible when + clicked or new_card shortcut */}
           <div
-            className={`fixed left-0 right-0 bottom-0 z-30 bg-base-100/95 backdrop-blur-md border-t border-base-content/10 transition-transform duration-300 ease-out ${
+            className={`fixed left-0 right-0 bottom-0 z-[60] bg-base-100/95 backdrop-blur-md border-t border-base-content/10 transition-transform duration-300 ease-out ${
               showQuickAddBar ? 'translate-y-0' : 'translate-y-full'
             }`}
           >

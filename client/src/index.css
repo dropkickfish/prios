@@ -1,4 +1,9 @@
 @import "tailwindcss";
+
+/* Prevent swiped/dragged elements from expanding the layout viewport on mobile */
+html, body {
+  overflow-x: hidden;
+}
 @plugin "@tailwindcss/typography";
 @plugin "daisyui" {
   themes: winter, night;
