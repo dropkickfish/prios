@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Stats } from '../modules/Stats/Stats';
 
 // Mock the API client
@@ -11,6 +12,15 @@ vi.mock('../api/client', () => ({
 
 const { apiClient } = await import('../api/client');
 
+function renderWithQuery(ui: React.ReactElement) {
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
+  return render(
+    <QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>
+  );
+}
+
 describe('Stats', () => {
   beforeEach(() => {
     vi.mocked(apiClient.getStats).mockReset();
@@ -18,7 +28,7 @@ describe('Stats', () => {
 
   it('shows loading state initially', () => {
     vi.mocked(apiClient.getStats).mockImplementation(() => new Promise(() => {}));
-    render(<Stats />);
+    renderWithQuery(<Stats />);
     expect(document.querySelector('.loading')).toBeInTheDocument();
   });
 
@@ -32,7 +42,7 @@ describe('Stats', () => {
         { date: '2026-02-13', completedCount: 3, abandonedCount: 1, skippedCount: 0 },
       ],
     });
-    render(<Stats />);
+    renderWithQuery(<Stats />);
     expect(await screen.findByText('5')).toBeInTheDocument();
     expect(await screen.findByText('2.3')).toBeInTheDocument();
     expect(await screen.findByText('85%')).toBeInTheDocument();
@@ -46,7 +56,7 @@ describe('Stats', () => {
       efficiency: 0,
       history: [{ date: '2026-02-14', completedCount: 1, abandonedCount: 0, skippedCount: 0 }],
     });
-    render(<Stats />);
+    renderWithQuery(<Stats />);
     await screen.findByText('Your Momentum');
     expect(screen.getByText('2026-02-14')).toBeInTheDocument();
     expect(screen.getByText('1')).toBeInTheDocument();

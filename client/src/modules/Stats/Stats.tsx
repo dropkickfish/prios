@@ -1,5 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { apiClient } from '../../api/client';
+import { queryKeys } from '../../api/queryKeys';
 
 interface DayStat {
   date: string;
@@ -27,17 +28,12 @@ function intensity(completed: number, max: number): string {
 }
 
 export const Stats = () => {
-  const [stats, setStats] = useState<StatsData | null>(null);
-  const [loading, setLoading] = useState(true);
+  const { data: stats, isLoading } = useQuery<StatsData>({
+    queryKey: queryKeys.stats(),
+    queryFn: apiClient.getStats,
+  });
 
-  useEffect(() => {
-    apiClient.getStats().then(data => {
-      setStats(data);
-      setLoading(false);
-    });
-  }, []);
-
-  if (loading) {
+  if (isLoading) {
     return (
       <div className="flex justify-center p-20">
         <span className="loading loading-bars loading-lg text-primary"></span>

@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import type { CardType, StatusType, BoardType, TagType } from '../../types';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import type { CardType, StatusType, BoardType } from '../../types';
 import { apiClient } from '../../api/client';
+import { queryKeys } from '../../api/queryKeys';
 import { EisenhowerMatrixHelper } from './EisenhowerMatrixHelper';
 import { TipTapEditor } from '../../components/TipTapEditor';
 import { SchedulePickerModal } from './SchedulePickerModal';
@@ -18,6 +20,8 @@ interface CardDetailModalProps {
 }
 
 export const CardDetailModal: React.FC<CardDetailModalProps> = ({ card, board, statuses, allCards, onClose, onUpdated, onDeleted, variant = 'modal' }) => {
+  const queryClient = useQueryClient();
+
   const [formData, setFormData] = useState({
     title: card.title,
     description: card.description || '',
@@ -39,15 +43,66 @@ export const CardDetailModal: React.FC<CardDetailModalProps> = ({ card, board, s
   }, [card]);
 
   const [showEisenhower, setShowEisenhower] = useState(false);
-  const [updates, setUpdates] = useState<any[]>([]);
   const [newComment, setNewComment] = useState('');
-  const [loadingUpdates, setLoadingUpdates] = useState(false);
   const [showSchedulePicker, setShowSchedulePicker] = useState(false);
-  const [availableTags, setAvailableTags] = useState<TagType[]>([]);
   const [newTagName, setNewTagName] = useState('');
-
   const [saveStatus, setSaveStatus] = useState<'saving' | 'saved' | 'error'>('saved');
-  const [dependencies, setDependencies] = useState<any[]>([]);
+
+  const { data: updates = [], isLoading: loadingUpdates } = useQuery<any[]>({
+    queryKey: queryKeys.cardUpdates(card.id),
+    queryFn: () => apiClient.getCardUpdates(card.id),
+  });
+
+  const { data: dependencies = [] } = useQuery<any[]>({
+    queryKey: queryKeys.cardDependencies(card.id),
+    queryFn: () => apiClient.getCardDependencies(card.id),
+  });
+
+  const { data: availableTags = [] } = useQuery<any[]>({
+    queryKey: queryKeys.tags(card.boardId),
+    queryFn: () => apiClient.getTags(card.boardId),
+  });
+
+  const addCommentMutation = useMutation({
+    mutationFn: (content: string) => apiClient.addCardUpdate(card.id, content),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.cardUpdates(card.id) }),
+  });
+
+  const addTagMutation = useMutation({
+    mutationFn: (tagId: string) => apiClient.addCardTag(card.id, tagId),
+    onSuccess: () => { onUpdated(); },
+  });
+
+  const removeTagMutation = useMutation({
+    mutationFn: (tagId: string) => apiClient.deleteCardTag(card.id, tagId),
+    onSuccess: () => { onUpdated(); },
+  });
+
+  const createTagMutation = useMutation({
+    mutationFn: (data: { name: string; boardId: string }) => apiClient.createTag(data),
+    onSuccess: (newTag) => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.tags(card.boardId) });
+      return apiClient.addCardTag(card.id, newTag.id).then(() => onUpdated());
+    },
+  });
+
+  const toggleDependencyMutation = useMutation({
+    mutationFn: async (otherCardId: string) => {
+      const existing = dependencies.find((d: any) =>
+        (d.blockingCardId === card.id && d.blockedCardId === otherCardId) ||
+        (d.blockingCardId === otherCardId && d.blockedCardId === card.id)
+      );
+      if (existing) {
+        return apiClient.deleteDependency(existing.id);
+      } else {
+        return apiClient.addDependency(otherCardId, card.id);
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.cardDependencies(card.id) });
+      onUpdated();
+    },
+  });
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -57,12 +112,8 @@ export const CardDetailModal: React.FC<CardDetailModalProps> = ({ card, board, s
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [onClose]);
 
-  // Fetch initial data
+  // Sync calendar on open if card is scheduled
   useEffect(() => {
-    fetchUpdates();
-    apiClient.getTags(card.boardId).then(setAvailableTags);
-    apiClient.getCardDependencies(card.id).then(setDependencies);
-    
     if (card.scheduledAt) {
        apiClient.syncCalendar().then((result) => {
          if (result.moved > 0 || result.deleted > 0) {
@@ -74,13 +125,13 @@ export const CardDetailModal: React.FC<CardDetailModalProps> = ({ card, board, s
 
   // Immediate feedback on changes
   useEffect(() => {
-    const hasChanged = 
+    const hasChanged =
       formData.title !== card.title ||
       formData.description !== (card.description || '') ||
       formData.difficulty !== card.difficulty ||
       formData.priority !== card.priority ||
       formData.statusId !== card.statusId;
-      
+
       if (hasChanged) {
         setSaveStatus('saving');
       }
@@ -89,7 +140,7 @@ export const CardDetailModal: React.FC<CardDetailModalProps> = ({ card, board, s
   // Handle auto-save for formData
   useEffect(() => {
     const timer = setTimeout(async () => {
-      const hasChanged = 
+      const hasChanged =
         formData.title !== card.title ||
         formData.description !== (card.description || '') ||
         formData.difficulty !== card.difficulty ||
@@ -113,15 +164,14 @@ export const CardDetailModal: React.FC<CardDetailModalProps> = ({ card, board, s
   const handleAddTag = async (tagId: string) => {
     if (card.tags?.some(t => t.id === tagId)) return;
     setSaveStatus('saving');
-    await apiClient.addCardTag(card.id, tagId);
+    await addTagMutation.mutateAsync(tagId);
     setSaveStatus('saved');
-    onUpdated();
   };
 
   const handleCreateTag = async () => {
      const lowerName = newTagName.trim().toLowerCase();
      if (!lowerName) return;
-     
+
      if (card.tags?.some(t => t.name.toLowerCase() === lowerName)) {
         setNewTagName('');
         return;
@@ -129,18 +179,9 @@ export const CardDetailModal: React.FC<CardDetailModalProps> = ({ card, board, s
 
      setSaveStatus('saving');
      try {
-       const newTag = await apiClient.createTag({ 
-         name: lowerName, 
-         boardId: card.boardId 
-       });
+       await createTagMutation.mutateAsync({ name: lowerName, boardId: card.boardId });
        setNewTagName('');
-       setAvailableTags(prev => {
-         if (prev.some(t => t.id === newTag.id)) return prev;
-         return [...prev, newTag];
-       });
-       await apiClient.addCardTag(card.id, newTag.id);
        setSaveStatus('saved');
-       onUpdated();
      } catch (err) {
        console.error("Failed to create tag", err);
        setSaveStatus('error');
@@ -149,45 +190,20 @@ export const CardDetailModal: React.FC<CardDetailModalProps> = ({ card, board, s
 
   const handleRemoveTag = async (tagId: string) => {
     setSaveStatus('saving');
-    await apiClient.deleteCardTag(card.id, tagId);
+    await removeTagMutation.mutateAsync(tagId);
     setSaveStatus('saved');
-    onUpdated();
   };
 
   const handleToggleDependency = async (otherCardId: string) => {
-    const existing = dependencies.find(d => 
-        (d.blockingCardId === card.id && d.blockedCardId === otherCardId) ||
-        (d.blockingCardId === otherCardId && d.blockedCardId === card.id)
-    );
-
     setSaveStatus('saving');
-    if (existing) {
-      await apiClient.deleteDependency(existing.id);
-      setDependencies(prev => prev.filter(d => d.id !== existing.id));
-    } else {
-      // For simplicity, we assume the other card blocks *this* card
-      const newDep = await apiClient.addDependency(otherCardId, card.id);
-      setDependencies(prev => [...prev, newDep]);
-    }
+    await toggleDependencyMutation.mutateAsync(otherCardId);
     setSaveStatus('saved');
-    onUpdated();
-  };
-
-  const fetchUpdates = async () => {
-    setLoadingUpdates(true);
-    try {
-      const data = await apiClient.getCardUpdates(card.id);
-      setUpdates(data);
-    } finally {
-      setLoadingUpdates(false);
-    }
   };
 
   const handleAddComment = async () => {
     if (!newComment.trim()) return;
-    await apiClient.addCardUpdate(card.id, newComment);
+    await addCommentMutation.mutateAsync(newComment);
     setNewComment('');
-    fetchUpdates();
   };
 
   const handleSchedule = async () => {
@@ -227,7 +243,7 @@ export const CardDetailModal: React.FC<CardDetailModalProps> = ({ card, board, s
         onClick={e => e.stopPropagation()}
       >
         {showEisenhower && (
-          <EisenhowerMatrixHelper 
+          <EisenhowerMatrixHelper
             onComplete={(res) => {
               setFormData({ ...formData, ...res });
               setShowEisenhower(false);
@@ -242,7 +258,7 @@ export const CardDetailModal: React.FC<CardDetailModalProps> = ({ card, board, s
             <div className="space-y-2 w-full">
               <label className="block text-[10px] font-black uppercase tracking-widest text-base-content/70">Card Title</label>
               <div className="flex justify-between items-center gap-4">
-                <input 
+                <input
                   className="input w-full bg-base-content/5 border border-base-content/10 focus:border-primary/50 focus:bg-base-content/10 rounded-2xl h-12 text-base font-bold px-4 transition-all placeholder:text-base-content/30"
                   value={formData.title}
                   onChange={(e) => setFormData({ ...formData, title: e.target.value })}
@@ -259,8 +275,8 @@ export const CardDetailModal: React.FC<CardDetailModalProps> = ({ card, board, s
             <div className="lg:col-span-2 space-y-6">
                 <label className="block text-[10px] font-black uppercase tracking-widest text-base-content/70 mb-2">Description & Context</label>
                 <div className="prose prose-sm dark:prose-invert max-w-none">
-                  <TipTapEditor 
-                    content={formData.description} 
+                  <TipTapEditor
+                    content={formData.description}
                     onChange={(val) => setFormData({ ...formData, description: val })}
                     placeholder="What needs to be done?"
                   />
@@ -286,8 +302,8 @@ export const CardDetailModal: React.FC<CardDetailModalProps> = ({ card, board, s
                   )}
                 </div>
                 <div className="flex gap-2">
-                  <input 
-                    type="text" 
+                  <input
+                    type="text"
                     placeholder="Add a comment..."
                     className="input input-bordered bg-base-100 border-base-content/10 rounded-xl flex-1 text-xs"
                     value={newComment}
@@ -302,7 +318,7 @@ export const CardDetailModal: React.FC<CardDetailModalProps> = ({ card, board, s
             <div className="space-y-6">
               <div className="space-y-2">
                 <label className="block text-[10px] font-black uppercase tracking-widest text-base-content/70">Status</label>
-                <select 
+                <select
                   className="select select-bordered w-full bg-base-200 border-base-content/10 rounded-xl"
                   value={formData.statusId}
                   onChange={(e) => setFormData({ ...formData, statusId: e.target.value })}
@@ -314,7 +330,7 @@ export const CardDetailModal: React.FC<CardDetailModalProps> = ({ card, board, s
               </div>
 
               <div className="bg-base-200/50 p-6 rounded-3xl border border-base-content/10 space-y-6 relative group/eval">
-                <button 
+                <button
                   onClick={() => setShowEisenhower(true)}
                   className="absolute top-4 right-4 btn btn-circle btn-xs btn-ghost hover:bg-primary/20 hover:text-primary transition-all"
                   title="Re-evaluate with Eisenhower Matrix"
@@ -326,8 +342,8 @@ export const CardDetailModal: React.FC<CardDetailModalProps> = ({ card, board, s
                   <label className="block text-[10px] font-black uppercase tracking-widest text-base-content/70">Priority</label>
                   <div className="flex items-center gap-3">
                     <span className="text-2xl font-black">P{formData.priority}</span>
-                    <input 
-                      type="range" min="1" max="4" 
+                    <input
+                      type="range" min="1" max="4"
                       className="range range-xs range-primary flex-1"
                       value={formData.priority}
                       onChange={(e) => setFormData({ ...formData, priority: parseInt(e.target.value) })}
@@ -339,8 +355,8 @@ export const CardDetailModal: React.FC<CardDetailModalProps> = ({ card, board, s
                   <label className="block text-[10px] font-black uppercase tracking-widest text-base-content/70">Difficulty</label>
                   <div className="flex items-center gap-3">
                     <span className="text-2xl font-black">D{formData.difficulty}</span>
-                    <input 
-                      type="range" min="1" max="5" 
+                    <input
+                      type="range" min="1" max="5"
                       className="range range-xs range-secondary flex-1"
                       value={formData.difficulty}
                       onChange={(e) => setFormData({ ...formData, difficulty: parseInt(e.target.value) })}
@@ -378,13 +394,13 @@ export const CardDetailModal: React.FC<CardDetailModalProps> = ({ card, board, s
                     </span>
                   ))}
                 </div>
-                
+
                 <div className="dropdown w-full">
                   <div className="flex gap-2">
-                    <input 
-                      type="text" 
-                      placeholder="Add tag..." 
-                      className="input input-sm input-bordered flex-1 rounded-xl bg-base-100" 
+                    <input
+                      type="text"
+                      placeholder="Add tag..."
+                      className="input input-sm input-bordered flex-1 rounded-xl bg-base-100"
                       value={newTagName}
                       onChange={(e) => setNewTagName(e.target.value.toLowerCase())}
                       onKeyDown={(e) => {
@@ -396,9 +412,9 @@ export const CardDetailModal: React.FC<CardDetailModalProps> = ({ card, board, s
                     />
                     <button type="button" onClick={handleCreateTag} className="btn btn-sm btn-ghost rounded-xl">+</button>
                   </div>
-                  {newTagName && availableTags.filter(t => t.name.toLowerCase().includes(newTagName.toLowerCase())).length > 0 && (
+                  {newTagName && availableTags.filter((t: any) => t.name.toLowerCase().includes(newTagName.toLowerCase())).length > 0 && (
                      <ul className="dropdown-content z-[60] menu p-2 shadow bg-base-100 rounded-box w-full mt-1 border border-base-content/10 max-h-40 overflow-y-auto">
-                        {availableTags.filter(t => t.name.toLowerCase().includes(newTagName.toLowerCase())).map(tag => (
+                        {availableTags.filter((t: any) => t.name.toLowerCase().includes(newTagName.toLowerCase())).map((tag: any) => (
                           <li key={tag.id}><a onClick={() => handleAddTag(tag.id)}>#{tag.name}</a></li>
                         ))}
                      </ul>
@@ -410,15 +426,15 @@ export const CardDetailModal: React.FC<CardDetailModalProps> = ({ card, board, s
                 <label className="block text-[10px] font-black uppercase tracking-widest text-base-content/70">Dependencies</label>
                 <div className="flex flex-wrap gap-2 max-h-32 overflow-y-auto p-3 bg-base-200/50 rounded-2xl border border-base-content/10">
                   {allCards.filter(c => c.id !== card.id).map(c => {
-                    const isDependent = dependencies.some(d => 
+                    const isDependent = dependencies.some((d: any) =>
                         (d.blockingCardId === card.id && d.blockedCardId === c.id) ||
                         (d.blockingCardId === c.id && d.blockedCardId === card.id)
                     );
                     return (
                       <label key={c.id} className="label cursor-pointer flex gap-3 p-2 bg-base-100 rounded-xl border border-base-content/5 hover:border-primary/20 transition-colors">
-                        <input 
-                          type="checkbox" 
-                          className="checkbox checkbox-xs checkbox-primary rounded-md border-base-content/20" 
+                        <input
+                          type="checkbox"
+                          className="checkbox checkbox-xs checkbox-primary rounded-md border-base-content/20"
                           checked={isDependent}
                           onChange={() => handleToggleDependency(c.id)}
                         />
@@ -435,7 +451,7 @@ export const CardDetailModal: React.FC<CardDetailModalProps> = ({ card, board, s
 
           {/* Footer */}
           <div className="p-8 py-4 border-t border-base-content/10 flex justify-between items-center bg-base-100/50 backdrop-blur-sm">
-            <button 
+            <button
               className="btn btn-ghost btn-sm text-error hover:bg-error/10 rounded-xl font-bold uppercase tracking-widest text-[10px]"
               onClick={handleDelete}
             >
@@ -461,7 +477,7 @@ export const CardDetailModal: React.FC<CardDetailModalProps> = ({ card, board, s
           </div>
         </div>
         {showSchedulePicker && (
-          <SchedulePickerModal 
+          <SchedulePickerModal
             card={card}
             schedulingWindowDays={board?.schedulingWindowDays || 3}
             onClose={() => setShowSchedulePicker(false)}

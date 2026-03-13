@@ -1,7 +1,9 @@
 import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '../../api/client';
+import { queryKeys } from '../../api/queryKeys';
 import type { CardType, StatusType, TagType } from '../../types';
 import { CardComponent } from '../../components/CardComponent';
 import { CardDetailModal } from '../Dashboard/CardDetailModal';
@@ -11,13 +13,11 @@ import { getTriageAutoFocusEnabled, getTriageAutoFocusMinutes } from '../../sett
 export const Prioritise = () => {
   const { boardId } = useParams<{ boardId: string }>();
   const navigate = useNavigate();
-  const [cards, setCards] = useState<CardType[]>([]);
-  const [statuses, setStatuses] = useState<StatusType[]>([]);
-  const [availableTags, setAvailableTags] = useState<TagType[]>([]);
+  const queryClient = useQueryClient();
+
   const [selectedTagIds, setSelectedTagIds] = useState<string[]>([]);
   const [sortBy, setSortBy] = useState<'value' | 'priority' | 'difficulty'>('value');
   const [sortOrder, setSortOrder] = useState<'desc' | 'asc'>('desc');
-  const [loading, setLoading] = useState(true);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [direction, setDirection] = useState(0);
   const [editingCard, setEditingCard] = useState<CardType | null>(null);
@@ -27,6 +27,61 @@ export const Prioritise = () => {
   const [dragOffset, setDragOffset] = useState(0);
   const dragStartRef = useRef<{ x: number } | null>(null);
   const hasDraggedRef = useRef(false);
+
+  const { data: allCards = [], isLoading: cardsLoading } = useQuery<CardType[]>({
+    queryKey: queryKeys.cards(boardId!),
+    queryFn: () => apiClient.getCards(boardId!),
+    enabled: !!boardId,
+  });
+
+  const { data: statuses = [], isLoading: statusesLoading } = useQuery<StatusType[]>({
+    queryKey: queryKeys.statuses(boardId!),
+    queryFn: () => apiClient.getStatuses(boardId!),
+    enabled: !!boardId,
+  });
+
+  const loading = cardsLoading || statusesLoading;
+
+  // Derive maybeCards from cached data
+  const maybeStatusIds = statuses
+    .filter(s => s.category === 'maybe')
+    .map(s => s.id);
+
+  let maybeCards = allCards.filter(c => maybeStatusIds.includes(c.statusId));
+
+  // Extract available tags from maybeCards
+  const tagsMap = new Map<string, TagType>();
+  maybeCards.forEach(card => {
+    card.tags?.forEach(tag => {
+      if (!tagsMap.has(tag.id)) tagsMap.set(tag.id, tag);
+    });
+  });
+  const availableTags = Array.from(tagsMap.values());
+
+  // Sort cards
+  maybeCards = [...maybeCards].sort((a, b) => {
+    let valA = 0;
+    let valB = 0;
+    switch (sortBy) {
+      case 'value':
+        valA = a.smartScore || 0;
+        valB = b.smartScore || 0;
+        break;
+      case 'priority':
+        valA = a.priority;
+        valB = b.priority;
+        break;
+      case 'difficulty':
+        valA = a.difficulty;
+        valB = b.difficulty;
+        break;
+    }
+    return sortOrder === 'desc' ? valB - valA : valA - valB;
+  });
+
+  const filteredCards = maybeCards
+    .filter(c => selectedTagIds.length === 0 || (c.tags && c.tags.some(t => selectedTagIds.includes(t.id))))
+    .slice(0, sessionLimit);
 
   const clearAutoFocusTimer = () => {
     if (autoFocusTimerRef.current) {
@@ -50,73 +105,7 @@ export const Prioritise = () => {
   useShortcut('arrow_right', () => handleDecision('focus'));
   useShortcut('arrow_up', () => currentCard && setEditingCard(currentCard));
 
-  useEffect(() => {
-    if (boardId) {
-      fetchData();
-    }
-  }, [boardId, sortBy, sortOrder]);
-
-  const fetchData = async () => {
-    if (!boardId) return;
-    setLoading(true);
-    try {
-      const [allCards, boardStatuses] = await Promise.all([
-        apiClient.getCards(boardId),
-        apiClient.getStatuses(boardId)
-      ]);
-      
-      setStatuses(boardStatuses);
-      
-      const maybeStatuses = boardStatuses.filter((s: StatusType) => s.category === 'maybe').map((s: StatusType) => s.id);
-      let maybeCards = allCards.filter((c: CardType) => maybeStatuses.includes(c.statusId));
-      
-      // Extract tags from maybeCards
-      const tagsMap = new Map<string, TagType>();
-      maybeCards.forEach((card: CardType) => {
-        card.tags?.forEach((tag: TagType) => {
-          if (!tagsMap.has(tag.id)) {
-            tagsMap.set(tag.id, tag);
-          }
-        });
-      });
-      setAvailableTags(Array.from(tagsMap.values()));
-
-      // Sort cards
-      maybeCards.sort((a: CardType, b: CardType) => {
-        let valA = 0;
-        let valB = 0;
-
-        switch (sortBy) {
-          case 'value':
-             valA = a.smartScore || 0;
-             valB = b.smartScore || 0;
-             break;
-          case 'priority':
-             valA = a.priority;
-             valB = b.priority;
-             break;
-          case 'difficulty':
-             valA = a.difficulty;
-             valB = b.difficulty;
-             break;
-        }
-
-        return sortOrder === 'desc' ? valB - valA : valA - valB;
-      });
-      
-      setCards(maybeCards);
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const filteredCards = cards
-    .filter(c => selectedTagIds.length === 0 || (c.tags && c.tags.some(t => selectedTagIds.includes(t.id))))
-    .slice(0, sessionLimit);
-
-  // Start or reset "blend into focus" timer when in triage with a card (must be after filteredCards)
+  // Start or reset "blend into focus" timer when in triage with a card
   useEffect(() => {
     const hasCard = filteredCards[currentIndex];
     if (!boardId || !hasCard) return;
@@ -138,6 +127,7 @@ export const Prioritise = () => {
       }
       try {
         await apiClient.updateCard(card.id, { statusId: doingStatus.id });
+        queryClient.invalidateQueries({ queryKey: queryKeys.cards(boardId) });
         setTimeout(() => {
           setDirection(0);
           navigate(`/boards/${boardId}/execute`);
@@ -145,8 +135,8 @@ export const Prioritise = () => {
       } catch (err: any) {
         setDirection(0);
         if (err?.message?.includes('Only one card') || err?.message?.includes('already in progress')) {
-          const allCards = await apiClient.getCards(boardId!);
-          const doingCard = allCards.find((c: CardType) => c.statusCategory === 'doing' || c.statusId === doingStatus.id);
+          const allBoardCards = await apiClient.getCards(boardId!);
+          const doingCard = allBoardCards.find((c: CardType) => c.statusCategory === 'doing' || c.statusId === doingStatus.id);
           if (doingCard) setSwapPrompt({ currentDoing: doingCard, cardToFocus: card });
           else alert(err.message || 'Another task is in Focus. Finish it first.');
         } else {
@@ -157,17 +147,17 @@ export const Prioritise = () => {
       // Skip logic: increment deferredCount
       try {
         const newCount = (card.deferredCount || 0) + 1;
-        
+
         if (newCount >= 10) {
           if (window.confirm(`You've skipped "${card.title}" ${newCount} times. Should we just delete it?`)) {
             await apiClient.deleteCard(card.id);
-            // Refresh cards or just move to next
           } else {
             await apiClient.updateCard(card.id, { deferredCount: newCount });
           }
         } else {
           await apiClient.updateCard(card.id, { deferredCount: newCount });
         }
+        queryClient.invalidateQueries({ queryKey: queryKeys.cards(boardId) });
       } catch (err) {
         console.error("Failed to update deferred count", err);
       }
@@ -183,7 +173,7 @@ export const Prioritise = () => {
     setSelectedTagIds(prev =>
       prev.includes(tagId) ? prev.filter(id => id !== tagId) : [...prev, tagId]
     );
-    setCurrentIndex(0); // Reset session
+    setCurrentIndex(0);
   };
 
   const swapPromptDesc = (card: CardType) => {
@@ -256,7 +246,7 @@ export const Prioritise = () => {
         </div>
         <h2 className="text-3xl font-black text-base-content">Session Complete!</h2>
         <p className="opacity-60 text-center max-w-xs text-base-content">
-          {cards.length > 0 ? "You've finished this triage session." : "Your backlog is clear!"}
+          {maybeCards.length > 0 ? "You've finished this triage session." : "Your backlog is clear!"}
         </p>
         <div className="flex gap-4">
           <button onClick={() => navigate('/')} className="btn btn-ghost">Dashboard</button>
@@ -280,7 +270,7 @@ export const Prioritise = () => {
 
          {/* Sorting Controls */}
          <div className="flex gap-2 justify-center pb-2">
-            <select 
+            <select
               className="select select-xs select-bordered rounded-full bg-base-200 font-bold uppercase text-[10px] tracking-widest"
               value={sortBy}
               onChange={(e) => {
@@ -292,7 +282,7 @@ export const Prioritise = () => {
               <option value="priority">Priority</option>
               <option value="difficulty">Difficulty</option>
             </select>
-            <button 
+            <button
               className="btn btn-xs btn-circle btn-ghost bg-base-200"
               onClick={() => {
                 setSortOrder(prev => prev === 'desc' ? 'asc' : 'desc');
@@ -311,8 +301,8 @@ export const Prioritise = () => {
                 key={tag.id}
                 onClick={() => toggleTag(tag.id)}
                 className={`btn btn-xs rounded-full border-none px-3 font-bold transition-all ${
-                  selectedTagIds.includes(tag.id) 
-                    ? 'bg-primary text-white scale-110' 
+                  selectedTagIds.includes(tag.id)
+                    ? 'bg-primary text-white scale-110'
                     : 'bg-base-200 opacity-60 hover:opacity-100'
                 }`}
               >
@@ -366,7 +356,7 @@ export const Prioritise = () => {
       </div>
 
       <div className="flex gap-8 items-center pt-4">
-        <button 
+        <button
           onClick={() => handleDecision('skip')}
           className="btn btn-circle btn-lg h-20 w-20 bg-base-100 border-none shadow-xl hover:bg-error hover:text-white transition-all group scale-90 hover:scale-100"
           title="Skip for now (Left Arrow)"
@@ -375,8 +365,8 @@ export const Prioritise = () => {
             <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
           </svg>
         </button>
-        
-        <button 
+
+        <button
           onClick={() => handleDecision('focus')}
           className="btn btn-circle btn-lg h-20 w-20 bg-primary border-none shadow-xl shadow-primary/30 hover:bg-primary-focus text-white transition-all hover:scale-110"
           title="Focus Now (Right Arrow)"
@@ -392,13 +382,16 @@ export const Prioritise = () => {
       </div>
 
       {editingCard && (
-        <CardDetailModal 
+        <CardDetailModal
           card={editingCard}
-          allCards={cards}
+          allCards={allCards}
           statuses={statuses}
           onClose={() => setEditingCard(null)}
-          onUpdated={fetchData}
-          onDeleted={fetchData}
+          onUpdated={() => queryClient.invalidateQueries({ queryKey: queryKeys.cards(boardId!) })}
+          onDeleted={() => {
+            setEditingCard(null);
+            queryClient.invalidateQueries({ queryKey: queryKeys.cards(boardId!) });
+          }}
         />
       )}
 
@@ -437,7 +430,7 @@ export const Prioritise = () => {
                     await apiClient.updateCard(swapPrompt.currentDoing.id, { statusId: doneStatus.id });
                     await apiClient.updateCard(swapPrompt.cardToFocus.id, { statusId: doingStatus.id });
                     setSwapPrompt(null);
-                    await fetchData();
+                    queryClient.invalidateQueries({ queryKey: queryKeys.cards(boardId!) });
                     navigate(`/boards/${boardId}/execute`);
                   } catch (err: unknown) {
                     alert(err instanceof Error ? err.message : 'Failed to update');
@@ -457,7 +450,7 @@ export const Prioritise = () => {
                     await apiClient.updateCard(swapPrompt.currentDoing.id, { statusId: maybeStatus.id });
                     await apiClient.updateCard(swapPrompt.cardToFocus.id, { statusId: doingStatus.id });
                     setSwapPrompt(null);
-                    await fetchData();
+                    queryClient.invalidateQueries({ queryKey: queryKeys.cards(boardId!) });
                     navigate(`/boards/${boardId}/execute`);
                   } catch (err: unknown) {
                     alert(err instanceof Error ? err.message : 'Failed to update');

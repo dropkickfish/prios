@@ -1,23 +1,25 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { 
-  DndContext, 
-  closestCenter, 
-  KeyboardSensor, 
-  PointerSensor, 
-  useSensor, 
-  useSensors, 
-  type DragEndEvent 
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent
 } from '@dnd-kit/core';
-import { 
-  arrayMove, 
-  SortableContext, 
-  sortableKeyboardCoordinates, 
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
   useSortable,
-  rectSortingStrategy 
+  rectSortingStrategy
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { apiClient } from '../../api/client';
+import { queryKeys } from '../../api/queryKeys';
 import type { BoardType } from '../../types';
 import { CreateBoardModal } from './CreateBoardModal';
 import { BoardSettingsModal } from './BoardSettingsModal';
@@ -52,10 +54,10 @@ const SortableBoardCard = ({ board, index, onEdit }: SortableBoardCardProps) => 
   };
 
   return (
-    <div 
-      ref={setNodeRef} 
-      style={style} 
-      {...attributes} 
+    <div
+      ref={setNodeRef}
+      style={style}
+      {...attributes}
       {...listeners}
       onClick={() => navigate(`/boards/${board.id}`)}
       className={`card bg-base-100 shadow-xl border-t-4 border-${board.colour || 'secondary'} hover:scale-[1.02] transition-transform overflow-hidden cursor-pointer group relative`}
@@ -64,11 +66,11 @@ const SortableBoardCard = ({ board, index, onEdit }: SortableBoardCardProps) => 
       <div className="absolute top-3 left-3 badge badge-sm badge-ghost font-black opacity-30">
         {index + 1}
       </div>
-      
+
       <div className="card-body">
         <div className="flex justify-between items-start">
           <h2 className="card-title text-2xl font-black">{board.name}</h2>
-          <button 
+          <button
             onClick={(e) => {
               e.stopPropagation();
               onEdit(board);
@@ -85,31 +87,31 @@ const SortableBoardCard = ({ board, index, onEdit }: SortableBoardCardProps) => 
         </div>
         <p className="opacity-70 text-sm">Productivity hub for {board.name}.</p>
         <div className="card-actions justify-end mt-6 gap-3">
-          <button 
+          <button
             onClick={(e) => {
               e.stopPropagation();
               navigate(`/boards/${board.id}`);
-            }} 
+            }}
             className="btn btn-sm btn-outline opacity-50 hover:opacity-100"
             onPointerDown={(e) => e.stopPropagation()}
           >
             View Board
           </button>
-          <button 
+          <button
             onClick={(e) => {
               e.stopPropagation();
               navigate(`/boards/${board.id}/prioritise`);
-            }} 
+            }}
             className="btn btn-sm btn-secondary text-white border-none shadow-md shadow-secondary/10"
             onPointerDown={(e) => e.stopPropagation()}
           >
             Prioritise
           </button>
-          <button 
+          <button
             onClick={(e) => {
               e.stopPropagation();
               navigate(`/boards/${board.id}/execute`);
-            }} 
+            }}
             className="btn btn-sm btn-primary text-white border-none shadow-md shadow-primary/30"
             onPointerDown={(e) => e.stopPropagation()}
           >
@@ -123,10 +125,22 @@ const SortableBoardCard = ({ board, index, onEdit }: SortableBoardCardProps) => 
 
 export const Dashboard = () => {
   const navigate = useNavigate();
-  const [boards, setBoards] = useState<BoardType[]>([]);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [editingBoard, setEditingBoard] = useState<BoardType | null>(null);
+
+  const { data: boards = [], isLoading } = useQuery<BoardType[]>({
+    queryKey: queryKeys.boards(),
+    queryFn: apiClient.getBoards,
+  });
+
+  const reorderMutation = useMutation({
+    mutationFn: (reordered: { id: string; order: number }[]) =>
+      apiClient.reorderBoards(reordered),
+    onSettled: () => queryClient.invalidateQueries({ queryKey: queryKeys.boards() }),
+  });
+
+  const invalidateBoards = () => queryClient.invalidateQueries({ queryKey: queryKeys.boards() });
 
   // Dashboard-specific shortcuts
   useShortcut('new_board', () => {
@@ -149,7 +163,7 @@ export const Dashboard = () => {
   const sensors = useSensors(
     useSensor(PointerSensor, {
       activationConstraint: {
-        distance: 8, // Require 8px movement before drag starts to prevent accidental drags on click
+        distance: 8,
       },
     }),
     useSensor(KeyboardSensor, {
@@ -157,35 +171,21 @@ export const Dashboard = () => {
     })
   );
 
-  useEffect(() => {
-    fetchBoards();
-  }, []);
-
-  const fetchBoards = async () => {
-    setLoading(true);
-    const data = await apiClient.getBoards();
-    setBoards(data);
-    setLoading(false);
-  };
-
   const handleDragEnd = async (event: DragEndEvent) => {
     const { active, over } = event;
 
     if (active.id !== over?.id) {
-      setBoards((items) => {
-        const oldIndex = items.findIndex((i) => i.id === active.id);
-        const newIndex = items.findIndex((i) => i.id === over?.id);
-        
-        const newOrder = arrayMove(items, oldIndex, newIndex);
-        
-        // Persist order
-        apiClient.reorderBoards(newOrder.map((board, index) => ({
-          id: board.id,
-          order: index
-        })));
+      const oldIndex = boards.findIndex(b => b.id === active.id);
+      const newIndex = boards.findIndex(b => b.id === over?.id);
+      const newOrder = arrayMove(boards, oldIndex, newIndex);
 
-        return newOrder;
-      });
+      // Optimistic update
+      queryClient.setQueryData(queryKeys.boards(), newOrder);
+
+      reorderMutation.mutate(newOrder.map((board, index) => ({
+        id: board.id,
+        order: index,
+      })));
     }
   };
 
@@ -198,8 +198,8 @@ export const Dashboard = () => {
           <h1 className="text-4xl font-black text-primary">Dashboard</h1>
           <p className="opacity-60 text-base-content">Manage your boards and track your progress. {boards.length}/{MAX_BOARDS} boards</p>
         </div>
-        <button 
-          onClick={() => setShowCreateModal(true)} 
+        <button
+          onClick={() => setShowCreateModal(true)}
           className="btn btn-primary shadow-lg shadow-primary/20 text-white border-none"
           disabled={!canCreateBoard}
           title={!canCreateBoard ? `Maximum ${MAX_BOARDS} boards reached` : 'Create New Board (N)'}
@@ -208,24 +208,24 @@ export const Dashboard = () => {
         </button>
       </div>
 
-      {loading ? (
+      {isLoading ? (
         <div className="flex justify-center p-12">
           <span className="loading loading-ring loading-lg text-primary"></span>
         </div>
       ) : (
-        <DndContext 
+        <DndContext
           sensors={sensors}
           collisionDetection={closestCenter}
           onDragEnd={handleDragEnd}
         >
-          <SortableContext 
+          <SortableContext
             items={boards.map(b => b.id)}
             strategy={rectSortingStrategy}
           >
              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 text-base-content">
               {boards.map((board, index) => (
-                <SortableBoardCard 
-                  key={board.id} 
+                <SortableBoardCard
+                  key={board.id}
                   board={board}
                   index={index}
                   onEdit={setEditingBoard}
@@ -250,24 +250,22 @@ export const Dashboard = () => {
       )}
 
       {showCreateModal && (
-        <CreateBoardModal 
+        <CreateBoardModal
           onClose={() => setShowCreateModal(false)}
-          onCreated={(newBoard) => {
-            if (boards.length < MAX_BOARDS) {
-              setBoards([...boards, newBoard]);
-            }
+          onCreated={() => {
+            invalidateBoards();
           }}
         />
       )}
 
       {editingBoard && (
-        <BoardSettingsModal 
+        <BoardSettingsModal
           board={editingBoard}
           onClose={() => setEditingBoard(null)}
-          onUpdated={fetchBoards}
+          onUpdated={invalidateBoards}
           onDeleted={() => {
             setEditingBoard(null);
-            fetchBoards();
+            invalidateBoards();
           }}
         />
       )}

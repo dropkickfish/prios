@@ -1,55 +1,45 @@
-import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '../../api/client';
+import { queryKeys } from '../../api/queryKeys';
 import type { CardType, StatusType } from '../../types';
 import { CardComponent } from '../../components/CardComponent';
 
 export const Execute = () => {
   const { boardId } = useParams<{ boardId: string }>();
   const navigate = useNavigate();
-  const [activeCard, setActiveCard] = useState<CardType | null>(null);
-  const [statuses, setStatuses] = useState<StatusType[]>([]);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
 
-  useEffect(() => {
-    if (boardId) {
-      fetchData();
-    }
-  }, [boardId]);
+  const { data: statuses = [] } = useQuery<StatusType[]>({
+    queryKey: queryKeys.statuses(boardId!),
+    queryFn: () => apiClient.getStatuses(boardId!),
+    enabled: !!boardId,
+  });
 
-  const fetchData = async () => {
-    if (!boardId) return;
-    setLoading(true);
-    try {
-      const [boardStatuses, boardCards] = await Promise.all([
-        apiClient.getStatuses(boardId),
-        apiClient.getCards(boardId),
-      ]);
+  const { data: cards = [], isLoading } = useQuery<CardType[]>({
+    queryKey: queryKeys.cards(boardId!),
+    queryFn: () => apiClient.getCards(boardId!),
+    enabled: !!boardId,
+  });
 
-      setStatuses(boardStatuses);
-      
-      const doingStatus = boardStatuses.find((s: StatusType) => s.category === 'doing');
-      if (doingStatus) {
-        const card = boardCards.find((c: CardType) => c.statusId === doingStatus.id);
-        setActiveCard(card || null);
-      }
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setLoading(false);
-    }
-  };
+  const doingStatus = statuses.find(s => s.category === 'doing');
+  const activeCard = doingStatus ? cards.find(c => c.statusId === doingStatus.id) ?? null : null;
+
+  const updateCardMutation = useMutation({
+    mutationFn: ({ cardId, statusId }: { cardId: string; statusId: string }) =>
+      apiClient.updateCard(cardId, { statusId }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.cards(boardId!) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.stats() });
+    },
+  });
 
   const handleComplete = async () => {
     if (!activeCard || !boardId) return;
-    
     try {
       const doneStatus = statuses.find(s => s.category === 'done');
       if (!doneStatus) throw new Error('No "Done" status found');
-
-      await apiClient.updateCard(activeCard.id, { statusId: doneStatus.id });
-      
-      setActiveCard(null);
+      await updateCardMutation.mutateAsync({ cardId: activeCard.id, statusId: doneStatus.id });
       alert('Task Completed! Great work.');
       navigate(`/boards/${boardId}`);
     } catch (err: any) {
@@ -59,20 +49,17 @@ export const Execute = () => {
 
   const handleBlocked = async () => {
     if (!activeCard || !boardId) return;
-
     try {
       const maybeStatus = statuses.find(s => s.category === 'maybe');
       if (!maybeStatus) throw new Error('No "Backlog" status found');
-
-      await apiClient.updateCard(activeCard.id, { statusId: maybeStatus.id });
-      setActiveCard(null);
+      await updateCardMutation.mutateAsync({ cardId: activeCard.id, statusId: maybeStatus.id });
       navigate(`/boards/${boardId}`);
     } catch (err: any) {
       alert(err.message || 'Failed to move to blocked');
     }
   };
 
-  if (loading) {
+  if (isLoading) {
     return (
       <div className="flex justify-center p-20">
         <span className="loading loading-spinner loading-lg text-primary"></span>
@@ -125,17 +112,17 @@ export const Execute = () => {
                   />
                 </div>
              </div>
-             
+
              <div className="hidden md:flex flex-col gap-3 shrink-0">
                <div className="card bg-base-100 shadow-xl p-4 md:p-5 space-y-4">
                   <h3 className="font-black uppercase tracking-widest text-xs opacity-40">Actions</h3>
-                  <button 
+                  <button
                     onClick={handleComplete}
                     className="btn btn-primary btn-lg w-full text-white shadow-lg shadow-primary/20"
                   >
                     Mark Complete
                   </button>
-                  <button 
+                  <button
                     onClick={handleBlocked}
                     className="btn btn-outline btn-lg w-full"
                   >

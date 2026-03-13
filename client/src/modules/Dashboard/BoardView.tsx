@@ -1,11 +1,12 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { 
-  DndContext, 
-  DragOverlay, 
-  useSensor, 
-  useSensors, 
-  PointerSensor, 
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import {
+  DndContext,
+  DragOverlay,
+  useSensor,
+  useSensors,
+  PointerSensor,
   closestCorners,
   defaultDropAnimationSideEffects,
   type DragEndEvent,
@@ -14,6 +15,7 @@ import {
 import { useDraggable, useDroppable } from '@dnd-kit/core';
 import type { BoardType, StatusType, CardType } from '../../types';
 import { apiClient } from '../../api/client';
+import { queryKeys } from '../../api/queryKeys';
 import { CardComponent } from '../../components/CardComponent';
 import { CreateCardModal } from './CreateCardModal';
 import { SchedulePickerModal } from './SchedulePickerModal';
@@ -61,8 +63,8 @@ const DroppableColumn = ({ statusId, children, className = '' }: DroppableColumn
   });
 
   return (
-    <div 
-      ref={setNodeRef} 
+    <div
+      ref={setNodeRef}
       className={`flex flex-col gap-3 p-2 bg-base-200/30 rounded-[1.5rem] min-h-[250px] border transition-colors shadow-[inset_0_2px_10px_rgba(0,0,0,0.05)] backdrop-blur-sm ${isOver ? 'border-primary/50 bg-primary/5' : 'border-base-content/5'} ${className}`}
     >
       {children}
@@ -73,20 +75,21 @@ const DroppableColumn = ({ statusId, children, className = '' }: DroppableColumn
 export const BoardView = () => {
   const { boardId } = useParams<{ boardId: string }>();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const sensors = useSensors(
     useSensor(PointerSensor, {
       activationConstraint: {
-        distance: 8, // Require movement of 8px to start drag (prevents accidental drags on click)
+        distance: 8,
       },
     })
   );
 
   const [dragCard, setDragCard] = useState<CardType | null>(null);
-  
+
   const handleDragStart = (event: DragStartEvent) => {
      setDragCard(event.active.data.current?.card || null);
   };
-  
+
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
     setDragCard(null);
@@ -95,8 +98,7 @@ export const BoardView = () => {
 
     const cardId = active.id as string;
     const newStatusId = over.id as string;
-    
-    // Find the card to check if status actually changed
+
     const card = cards.find(c => c.id === cardId);
     if (card && card.statusId !== newStatusId) {
       handleStatusChange(cardId, newStatusId);
@@ -106,11 +108,8 @@ export const BoardView = () => {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [selectedStatusId, setSelectedStatusId] = useState<string | null>(null);
   const [schedulingCard, setSchedulingCard] = useState<CardType | null>(null);
-  const [viewerCard, setViewerCard] = useState<CardType | null>(null);
-  const [board, setBoard] = useState<BoardType | null>(null);
-  const [statuses, setStatuses] = useState<StatusType[]>([]);
-  const [cards, setCards] = useState<CardType[]>([]);
-  const [loading, setLoading] = useState(true);
+  // Store viewerCardId so the viewer stays in sync with the cached card data
+  const [viewerCardId, setViewerCardId] = useState<string | null>(null);
   const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [collapsedCategories, setCollapsedCategories] = useState<string[]>(['maybe', 'scheduled', 'done', 'wontdo']);
   const [filterText, setFilterText] = useState('');
@@ -119,6 +118,60 @@ export const BoardView = () => {
   const [showCommandBar, setShowCommandBar] = useState(false);
   const [showQuickAddBar, setShowQuickAddBar] = useState(false);
   const { shortcuts } = useKeyboard();
+
+  const { data: boards = [] } = useQuery<BoardType[]>({
+    queryKey: queryKeys.boards(),
+    queryFn: apiClient.getBoards,
+  });
+
+  const board = boards.find(b => b.id === boardId) ?? null;
+
+  const { data: statuses = [], isLoading: statusesLoading } = useQuery<StatusType[]>({
+    queryKey: queryKeys.statuses(boardId!),
+    queryFn: () => apiClient.getStatuses(boardId!),
+    enabled: !!boardId,
+  });
+
+  const { data: cards = [], isLoading: cardsLoading } = useQuery<CardType[]>({
+    queryKey: queryKeys.cards(boardId!),
+    queryFn: () => apiClient.getCards(boardId!),
+    enabled: !!boardId,
+  });
+
+  const loading = statusesLoading || cardsLoading;
+
+  // Derive viewer card from cached data so it auto-updates after mutations
+  const viewerCard = viewerCardId ? cards.find(c => c.id === viewerCardId) ?? null : null;
+
+  // Redirect if board not found (once boards have loaded)
+  useEffect(() => {
+    if (!boardId || boards.length === 0) return;
+    if (!boards.find(b => b.id === boardId)) {
+      navigate('/');
+    }
+  }, [boards, boardId]);
+
+  // Non-blocking calendar sync on mount
+  useEffect(() => {
+    if (!boardId) return;
+    apiClient.syncCalendar()
+      .then((result) => {
+        if (result.synced > 0 || result.moved > 0 || result.deleted > 0) {
+          console.log("Sync detected changes, refreshing...");
+          queryClient.invalidateQueries({ queryKey: queryKeys.cards(boardId) });
+        }
+      })
+      .catch(err => console.error("Sync failed", err));
+  }, [boardId]);
+
+  const updateCardMutation = useMutation({
+    mutationFn: ({ cardId, statusId }: { cardId: string; statusId: string }) =>
+      apiClient.updateCard(cardId, { statusId }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.cards(boardId!) });
+      apiClient.syncCalendar().catch(err => console.error("Sync failed", err));
+    },
+  });
 
   const openQuickAdd = () => {
     const firstMaybe = statuses.find(s => s.category === 'maybe');
@@ -153,65 +206,6 @@ export const BoardView = () => {
     }
   });
 
-  const fetchData = async () => {
-    if (!boardId) return;
-
-    const [boards, boardStatuses, boardCards] = await Promise.all([
-      apiClient.getBoards(),
-      apiClient.getStatuses(boardId),
-      apiClient.getCards(boardId),
-    ]);
-    
-    // Ensure we refresh the board data to get latest colour/schedule
-    // Since getBoards() returns all boards, we find ours
-    const currentBoard = boards.find((b: any) => b.id === boardId);
-    
-    if (!currentBoard) {
-      navigate('/');
-      return; 
-    }
-
-    setBoard(currentBoard || null);
-    setStatuses(boardStatuses);
-    setCards(boardCards);
-    
-    // Refresh viewer card if open
-    if (viewerCard) {
-      const updatedViewerCard = boardCards.find((c: CardType) => c.id === viewerCard.id);
-      if (updatedViewerCard) setViewerCard(updatedViewerCard);
-    }
-
-    setLoading(false);
-
-    // Non-blocking sync
-    apiClient.syncCalendar()
-      .then((result) => {
-         if (result.synced > 0 || result.moved > 0 || result.deleted > 0) {
-             console.log("Sync detected changes, refreshing...");
-             // Refresh only cards
-             apiClient.getCards(boardId).then((newCards) => {
-                 setCards(newCards);
-                 // If a card is open in viewer, refresh it too
-                 if (viewerCard) {
-                     const updatedViewerCard = newCards.find((c: any) => c.id === viewerCard.id);
-                     if (updatedViewerCard) setViewerCard(updatedViewerCard);
-                 }
-             });
-         }
-      })
-      .catch(err => console.error("Sync failed", err));
-  };
-  
-  // Re-fetch when showSettingsModal closes to update UI with new colour
-  const handleSettingsClose = () => {
-    setShowSettingsModal(false);
-    fetchData(); 
-  };
-
-  useEffect(() => {
-    fetchData();
-  }, [boardId]);
-
   const handleStatusChange = async (cardId: string, newStatusId: string) => {
     if (!boardId) return;
     const newStatus = statuses.find(s => s.id === newStatusId);
@@ -226,10 +220,7 @@ export const BoardView = () => {
     }
 
     try {
-      await apiClient.updateCard(cardId, { statusId: newStatusId });
-      apiClient.syncCalendar().then(() => fetchData()).catch(err => console.error("Sync failed", err));
-      const boardCards = await apiClient.getCards(boardId);
-      setCards(boardCards);
+      await updateCardMutation.mutateAsync({ cardId, statusId: newStatusId });
 
       if (newStatus?.category === 'done') {
         setTimeout(() => {
@@ -254,7 +245,7 @@ export const BoardView = () => {
       await apiClient.updateCard(focusConflict.currentDoing.id, { statusId: targetStatusId });
       await apiClient.updateCard(focusConflict.cardToMove.id, { statusId: doingStatus.id });
       setFocusConflict(null);
-      await fetchData();
+      queryClient.invalidateQueries({ queryKey: queryKeys.cards(boardId) });
     } catch (err: unknown) {
       alert(err instanceof Error ? err.message : 'Failed to update');
     }
@@ -274,14 +265,14 @@ export const BoardView = () => {
 
   const onCardScheduled = () => {
     setSchedulingCard(null);
-    fetchData(); 
+    queryClient.invalidateQueries({ queryKey: queryKeys.cards(boardId!) });
   };
 
   const getCardsByStatus = (statusId: string) => {
     const status = statuses.find(s => s.id === statusId);
     const filtered = cards.filter(card => {
        const matchesStatus = card.statusId === statusId;
-       const matchesFilter = filterText === '' || 
+       const matchesFilter = filterText === '' ||
          card.title.toLowerCase().includes(filterText.toLowerCase()) ||
          (typeof card.description === 'string' && card.description.toLowerCase().includes(filterText.toLowerCase()));
        return matchesStatus && matchesFilter;
@@ -344,8 +335,7 @@ export const BoardView = () => {
             const maybeStatus = statuses.find(s => s.category === 'maybe');
             if (!maybeStatus) return;
             await apiClient.createCard(boardId!, { title, statusId: maybeStatus.id, difficulty: 3, priority: 3 });
-            const next = await apiClient.getCards(boardId!);
-            setCards(next);
+            queryClient.invalidateQueries({ queryKey: queryKeys.cards(boardId!) });
           }}
         />
       )}
@@ -387,17 +377,20 @@ export const BoardView = () => {
       {showSettingsModal && board && (
         <BoardSettingsModal
           board={board}
-          onClose={handleSettingsClose}
+          onClose={() => {
+            setShowSettingsModal(false);
+            queryClient.invalidateQueries({ queryKey: queryKeys.boards() });
+          }}
           onUpdated={(updatedBoard) => {
-            setBoard(updatedBoard);
-            handleSettingsClose();
+            queryClient.invalidateQueries({ queryKey: queryKeys.boards() });
+            setShowSettingsModal(false);
           }}
         />
       )}
       {showCreateModal && boardId && (
-        <CreateCardModal 
-          boardId={boardId} 
-          statuses={statuses} 
+        <CreateCardModal
+          boardId={boardId}
+          statuses={statuses}
           existingCards={cards}
           initialStatusId={selectedStatusId}
           onClose={() => {
@@ -406,7 +399,7 @@ export const BoardView = () => {
             setShowQuickAddBar(false);
           }}
           onCreated={() => {
-             apiClient.getCards(boardId).then(setCards);
+            queryClient.invalidateQueries({ queryKey: queryKeys.cards(boardId) });
           }}
         />
       )}
@@ -469,7 +462,7 @@ export const BoardView = () => {
             cards={cards}
             scheduledStatusId={scheduledStatus?.id ?? null}
             filterText={filterText}
-            onCardClick={(card) => !(showCreateModal || viewerCard || schedulingCard) && setViewerCard(card)}
+            onCardClick={(card) => !(showCreateModal || viewerCard || schedulingCard) && setViewerCardId(card.id)}
         />
 
         <div className="flex flex-col gap-4 min-h-[50vh] items-stretch">
@@ -532,7 +525,7 @@ export const BoardView = () => {
                                     statuses={statuses}
                                     variant="backlog"
                                     showActions={true}
-                                    onClick={() => !(showCreateModal || viewerCard || schedulingCard) && setViewerCard(card)}
+                                    onClick={() => !(showCreateModal || viewerCard || schedulingCard) && setViewerCardId(card.id)}
                                     onStatusChange={(_, newStatusId) => handleStatusChange(card.id, newStatusId)}
                                     onSchedule={handleSchedule}
                                   />
@@ -574,7 +567,7 @@ export const BoardView = () => {
                             statuses={statuses}
                             showActions={true}
                             constrainDescriptionOnMobile
-                            onClick={() => !(showCreateModal || viewerCard || schedulingCard) && setViewerCard(card)}
+                            onClick={() => !(showCreateModal || viewerCard || schedulingCard) && setViewerCardId(card.id)}
                             onStatusChange={(_, newStatusId) => handleStatusChange(card.id, newStatusId)}
                             onSchedule={handleSchedule}
                           />
@@ -641,7 +634,7 @@ export const BoardView = () => {
                               {getCardsByStatus(status.id).map(card => (
                                 <DraggableCard key={card.id} card={card}>
                                   <CardComponent card={card} statuses={statuses} showActions={true}
-                                    onClick={() => !(showCreateModal || viewerCard || schedulingCard) && setViewerCard(card)}
+                                    onClick={() => !(showCreateModal || viewerCard || schedulingCard) && setViewerCardId(card.id)}
                                     onStatusChange={(_, newStatusId) => handleStatusChange(card.id, newStatusId)}
                                     onSchedule={handleSchedule} />
                                 </DraggableCard>
@@ -670,7 +663,7 @@ export const BoardView = () => {
       </DndContext>
       </div>
       {schedulingCard && (
-        <SchedulePickerModal 
+        <SchedulePickerModal
           card={schedulingCard}
           schedulingWindowDays={board?.schedulingWindowDays || 3}
           onClose={() => setSchedulingCard(null)}
@@ -678,14 +671,19 @@ export const BoardView = () => {
         />
       )}
       {viewerCard && (
-        <CardDetailModal 
+        <CardDetailModal
           card={viewerCard}
           board={board}
           statuses={statuses}
           allCards={cards}
-          onClose={() => setViewerCard(null)}
-          onUpdated={async () => { fetchData(); }}
-          onDeleted={fetchData}
+          onClose={() => setViewerCardId(null)}
+          onUpdated={() => {
+            queryClient.invalidateQueries({ queryKey: queryKeys.cards(boardId!) });
+          }}
+          onDeleted={() => {
+            setViewerCardId(null);
+            queryClient.invalidateQueries({ queryKey: queryKeys.cards(boardId!) });
+          }}
           variant="modal"
         />
       )}
@@ -739,8 +737,7 @@ export const BoardView = () => {
                     difficulty: 3,
                     priority: 3,
                   });
-                  const next = await apiClient.getCards(boardId);
-                  setCards(next);
+                  queryClient.invalidateQueries({ queryKey: queryKeys.cards(boardId) });
                 }}
               />
             </div>
