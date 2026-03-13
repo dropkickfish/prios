@@ -5,6 +5,7 @@ export const KeyboardSettings = () => {
   const { shortcuts, updateShortcut } = useKeyboard();
   const [editingAction, setEditingAction] = useState<ShortcutAction | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const isMac = typeof navigator !== 'undefined' && /mac/i.test(navigator.platform);
 
   const actionLabels: Record<ShortcutAction, string> = {
     filter: 'Search / Filter Tasks',
@@ -29,14 +30,25 @@ export const KeyboardSettings = () => {
     board_prioritise: 'Launch Triage Mode',
   };
 
-  const formatShortcut = (shortcut: typeof shortcuts[ShortcutAction]) => {
+  const toKeyLabel = (rawKey: string) => {
+    const key = rawKey.toLowerCase();
+    if (key === 'arrowleft') return '←';
+    if (key === 'arrowright') return '→';
+    if (key === 'arrowup') return '↑';
+    if (key === 'arrowdown') return '↓';
+    if (key === 'escape') return 'Esc';
+    if (key === ' ') return 'Space';
+    return rawKey.length === 1 ? rawKey.toUpperCase() : rawKey[0].toUpperCase() + rawKey.slice(1);
+  };
+
+  const formatShortcutParts = (shortcut: typeof shortcuts[ShortcutAction]) => {
     const parts: string[] = [];
     if (shortcut.ctrl) parts.push('Ctrl');
-    if (shortcut.meta) parts.push('Cmd');
+    if (shortcut.meta) parts.push(isMac ? '⌘' : 'Meta');
     if (shortcut.shift) parts.push('Shift');
     if (shortcut.alt) parts.push('Alt');
-    parts.push(shortcut.key.toUpperCase());
-    return parts.join('+');
+    parts.push(toKeyLabel(shortcut.key));
+    return parts;
   };
 
   const handleKeyDown = (e: React.KeyboardEvent, action: ShortcutAction) => {
@@ -55,8 +67,8 @@ export const KeyboardSettings = () => {
         alt: e.altKey,
       });
       setEditingAction(null);
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Could not update shortcut');
     }
   };
 
@@ -88,11 +100,19 @@ export const KeyboardSettings = () => {
                   onKeyDown={(e) => handleKeyDown(e, action)}
                 />
               ) : (
-                <button 
+                <button
                   onClick={() => setEditingAction(action)}
-                  className="kbd kbd-md cursor-pointer hover:scale-110 transition-transform hover:border-primary"
+                  className="btn btn-ghost h-auto min-h-0 px-2.5 py-1.5 rounded-lg hover:bg-base-300"
+                  aria-label={`Edit shortcut for ${actionLabels[action]}`}
                 >
-                  {formatShortcut(shortcuts[action])}
+                  <span className="flex items-center gap-1 whitespace-nowrap">
+                    {formatShortcutParts(shortcuts[action]).map((part, idx) => (
+                      <span key={`${action}-${part}-${idx}`} className="flex items-center gap-1">
+                        {idx > 0 && <span className="text-xs opacity-70">+</span>}
+                        <kbd className="kbd kbd-sm font-semibold">{part}</kbd>
+                      </span>
+                    ))}
+                  </span>
                 </button>
               )}
             </div>

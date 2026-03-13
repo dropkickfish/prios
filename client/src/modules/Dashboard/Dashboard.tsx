@@ -61,73 +61,67 @@ const SortableBoardCard = ({ board, index, onEdit }: SortableBoardCardProps) => 
       {...attributes}
       {...listeners}
       onClick={() => navigate(`/boards/${board.id}`)}
-      className={`card bg-base-100 shadow-sm border border-base-content/10 hover:shadow-xl hover:-translate-y-0.5 transition-all overflow-hidden cursor-pointer group relative`}
+      className="group relative rounded-2xl border border-base-content/12 bg-base-100 transition-all hover:border-base-content/25 hover:shadow-sm cursor-pointer"
     >
-      <div className={`absolute inset-x-0 top-0 h-1.5 bg-${board.colour || 'secondary'} opacity-75`} />
-      <div className="absolute top-3 left-3 rounded-full px-2.5 py-1 text-[10px] uppercase tracking-wider font-bold bg-base-200 text-base-content/60">
-        Board {index + 1}
-      </div>
-
-      <div className="card-body pt-12">
-        <div className="flex justify-between items-start">
-          <h2 className="card-title text-2xl font-black tracking-tight">{board.name}</h2>
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              onEdit(board);
-            }}
-            className="btn btn-circle btn-sm w-10 h-10 min-h-10 btn-ghost opacity-40 hover:opacity-100"
-            title="Board Settings"
-            onPointerDown={(e) => e.stopPropagation()} // Prevent drag start
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87.074.04.147.083.22.127.324.196.72.257 1.075.124l1.217-.456a1.125 1.125 0 011.37.49l1.296 2.247a1.125 1.125 0 01-.26 1.431l-1.003.827c-.293.24-.438.613-.431.992a6.759 6.759 0 010 .255c-.007.378.138.75.43.99l1.005.828c.424.35.534.954.26 1.43l-1.298 2.247a1.125 1.125 0 01-1.369.491l-1.217-.456c-.355-.133-.75-.072-1.076.124a6.57 6.57 0 01-.22.128c-.331.183-.581.495-.644.869l-.213 1.28c-.09.543-.56.941-1.11.941h-2.594c-.55 0-1.02-.398-1.11-.94l-.213-1.281c-.062-.374-.312-.686-.644-.87a6.52 6.52 0 01-.22-.127c-.325-.196-.72-.257-1.076-.124l-1.217.456a1.125 1.125 0 01-1.369-.49l-1.297-2.247a1.125 1.125 0 01.26-1.431l1.004-.827c.292-.24.437-.613.43-.992a6.932 6.932 0 010-.255c.007-.378-.138-.75-.43-.99l-1.004-.828a1.125 1.125 0 01-.26-1.43l1.297-2.247a1.125 1.125 0 011.37-.491l1.216.456c.356.133.751.072 1.076-.124.072-.044.146-.087.22-.128.332-.183.582-.495.644-.869l.214-1.281z" />
-              <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-            </svg>
-          </button>
-        </div>
-        <div className="flex flex-wrap gap-2 mt-2">
-          {(board.cardCounts?.doing ?? 0) > 0 && (
-            <span className="text-xs font-bold text-primary bg-primary/10 rounded-full px-2.5 py-1">{board.cardCounts!.doing} in focus</span>
-          )}
-          {(board.cardCounts?.maybe ?? 0) > 0 && (
-            <span className="text-xs text-base-content/60 bg-base-200 rounded-full px-2.5 py-1">{board.cardCounts!.maybe} in backlog</span>
-          )}
-          {!(board.cardCounts?.doing) && !(board.cardCounts?.maybe) && (
-            <span className="text-xs text-base-content/45 bg-base-200 rounded-full px-2.5 py-1">No active tasks</span>
-          )}
-        </div>
-        <div className="card-actions justify-end mt-7 gap-2">
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              navigate(`/boards/${board.id}`);
-            }}
-            className="btn btn-sm h-10 min-h-10 btn-ghost border border-base-content/15"
-            onPointerDown={(e) => e.stopPropagation()}
-          >
-            View Board
-          </button>
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              navigate(`/boards/${board.id}/prioritise`);
-            }}
-            className="btn btn-sm h-10 min-h-10 btn-secondary text-white border-none shadow-md shadow-secondary/10"
-            onPointerDown={(e) => e.stopPropagation()}
-          >
-            Prioritise
-          </button>
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              navigate(`/boards/${board.id}/execute`);
-            }}
-            className="btn btn-sm h-10 min-h-10 btn-primary text-white border-none shadow-md shadow-primary/30"
-            onPointerDown={(e) => e.stopPropagation()}
-          >
-            Execute
-          </button>
+      <div className="flex items-start gap-3 px-4 py-4 sm:px-5 sm:py-5">
+        <div className={`mt-1 h-10 w-1.5 rounded-full bg-${board.colour || 'secondary'} opacity-60`} aria-hidden />
+        <div className="min-w-0 flex-1">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <p className="text-[10px] uppercase tracking-[0.18em] text-base-content/45 font-semibold">Board {index + 1}</p>
+              <h2 className="mt-1 text-2xl font-black tracking-tight text-base-content line-clamp-1">{board.name}</h2>
+            </div>
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onEdit(board);
+              }}
+              className="btn btn-circle btn-sm w-9 h-9 min-h-9 btn-ghost opacity-45 hover:opacity-100"
+              title="Board Settings"
+              onPointerDown={(e) => e.stopPropagation()}
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87.074.04.147.083.22.127.324.196.72.257 1.075.124l1.217-.456a1.125 1.125 0 011.37.49l1.296 2.247a1.125 1.125 0 01-.26 1.431l-1.003.827c-.293.24-.438.613-.431.992a6.759 6.759 0 010 .255c-.007.378.138.75.43.99l1.005.828c.424.35.534.954.26 1.43l-1.298 2.247a1.125 1.125 0 01-1.369.491l-1.217-.456c-.355-.133-.75-.072-1.076.124a6.57 6.57 0 01-.22.128c-.331.183-.581.495-.644.869l-.213 1.28c-.09.543-.56.941-1.11.941h-2.594c-.55 0-1.02-.398-1.11-.94l-.213-1.281c-.062-.374-.312-.686-.644-.87a6.52 6.52 0 01-.22-.127c-.325-.196-.72-.257-1.076-.124l-1.217.456a1.125 1.125 0 01-1.369-.49l-1.297-2.247a1.125 1.125 0 01.26-1.431l1.004-.827c.292-.24.437-.613.43-.992a6.932 6.932 0 010-.255c.007-.378-.138-.75-.43-.99l-1.004-.828a1.125 1.125 0 01-.26-1.43l1.297-2.247a1.125 1.125 0 011.37-.491l1.216.456c.356.133.751.072 1.076-.124.072-.044.146-.087.22-.128.332-.183.582-.495.644-.869l.214-1.281z" />
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+              </svg>
+            </button>
+          </div>
+          <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs text-base-content/60">
+            <span>{board.cardCounts?.doing ?? 0} in focus</span>
+            <span>{board.cardCounts?.maybe ?? 0} in backlog</span>
+          </div>
+          <div className="mt-4 flex flex-wrap items-center gap-3 text-sm font-semibold">
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                navigate(`/boards/${board.id}`);
+              }}
+              className="text-base-content/80 hover:text-base-content underline underline-offset-4 decoration-base-content/20 hover:decoration-base-content/50 transition-colors"
+              onPointerDown={(e) => e.stopPropagation()}
+            >
+              Open board
+            </button>
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                navigate(`/boards/${board.id}/prioritise`);
+              }}
+              className="text-base-content/65 hover:text-base-content transition-colors"
+              onPointerDown={(e) => e.stopPropagation()}
+            >
+              Prioritise
+            </button>
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                navigate(`/boards/${board.id}/execute`);
+              }}
+              className="text-primary hover:text-primary/80 transition-colors"
+              onPointerDown={(e) => e.stopPropagation()}
+            >
+              Execute
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -205,27 +199,25 @@ export const Dashboard = () => {
 
   return (
     <div className="space-y-8 text-secondary-content">
-      <div className="rounded-3xl border border-base-content/10 bg-base-100 px-5 py-5 sm:px-7 sm:py-6 shadow-sm">
+      <div className="max-w-4xl space-y-2">
+        <p className="text-[11px] uppercase tracking-[0.22em] font-bold text-base-content/50">Workspace</p>
         <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-          <div className="space-y-1">
-            <p className="text-[11px] uppercase tracking-[0.22em] font-bold text-base-content/55">Workspace</p>
-            <h1 className="text-4xl sm:text-5xl font-black tracking-tight text-primary">Boards</h1>
-            <p className="text-sm text-base-content/70">Choose where to collect, prioritise, and execute work.</p>
+          <div>
+            <h1 className="text-4xl sm:text-5xl font-black tracking-tight text-base-content">Boards</h1>
+            <p className="text-sm text-base-content/65 mt-1">Choose a board, then move into focused execution.</p>
           </div>
           <button
             onClick={() => setShowCreateModal(true)}
-            className="btn btn-primary shadow-lg shadow-primary/20 text-white border-none h-11 min-h-11 px-5"
+            className="btn btn-outline border-base-content/20 text-base-content h-11 min-h-11 px-5 hover:border-primary/40 hover:text-primary"
             disabled={!canCreateBoard}
             title={!canCreateBoard ? `Maximum ${MAX_BOARDS} boards reached` : 'Create New Board (N)'}
           >
             New Board
           </button>
         </div>
-        <div className="mt-5 flex flex-wrap gap-2 text-[11px] uppercase tracking-wider font-semibold">
-          <span className="rounded-full bg-base-200 px-3 py-1.5 text-base-content/75">{boards.length}/{MAX_BOARDS} active boards</span>
-          <span className="rounded-full bg-primary/10 px-3 py-1.5 text-primary">{boards.reduce((sum, b) => sum + (b.cardCounts?.doing ?? 0), 0)} in focus now</span>
-          <span className="rounded-full bg-base-200 px-3 py-1.5 text-base-content/70">{boards.reduce((sum, b) => sum + (b.cardCounts?.maybe ?? 0), 0)} in backlog</span>
-        </div>
+        <p className="text-xs text-base-content/50">
+          {boards.length}/{MAX_BOARDS} boards · {boards.reduce((sum, b) => sum + (b.cardCounts?.doing ?? 0), 0)} tasks in focus · {boards.reduce((sum, b) => sum + (b.cardCounts?.maybe ?? 0), 0)} in backlog
+        </p>
       </div>
 
       {isLoading ? (
@@ -242,7 +234,7 @@ export const Dashboard = () => {
             items={boards.map(b => b.id)}
             strategy={rectSortingStrategy}
           >
-             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 text-base-content">
+             <div className="grid grid-cols-1 gap-4 max-w-4xl text-base-content">
               {boards.map((board, index) => (
                 <SortableBoardCard
                   key={board.id}

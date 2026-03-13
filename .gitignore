@@ -5,3 +5,4 @@ planning/*
 server/sqlite.db
 .claude/*
 .cursor/*
+server/sqlite.db

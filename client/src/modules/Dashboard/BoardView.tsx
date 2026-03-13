@@ -390,9 +390,10 @@ export const BoardView = () => {
         />
       )}
       <div className="px-4 sm:px-6">
-        <div className="rounded-3xl border border-base-content/10 bg-base-100 px-4 py-4 sm:px-5 sm:py-5 shadow-sm">
+        <div className="rounded-3xl border border-primary/20 bg-base-100/95 px-4 py-4 sm:px-5 sm:py-5 shadow-sm">
         <div className="flex flex-wrap justify-between items-start gap-x-6 gap-y-3">
           <div className="min-w-0 flex-1">
+            <p className="text-[10px] uppercase tracking-[0.2em] text-primary/70 font-semibold mb-1">Execution board</p>
             <div className="flex items-center gap-2 flex-wrap">
               <BoardSwitcher currentBoard={board} onSwitch={(id) => navigate(`/boards/${id}`)} />
               <button onClick={() => setShowSettingsModal(true)} className="btn btn-ghost btn-circle btn-sm w-11 h-11 min-h-11 shrink-0" title="Board settings">
@@ -405,6 +406,14 @@ export const BoardView = () => {
             <div className="mt-2 inline-flex items-center gap-2 rounded-full bg-base-200 px-3 py-1.5 text-[11px] font-semibold tracking-wide text-base-content/70">
               <span className={`w-2 h-2 rounded-full animate-pulse bg-${board.colour || 'primary'}`}></span>
               {doingStatus && getCardsByStatus(doingStatus.id).length > 0 ? '1 task in focus' : 'Focus slot empty'}
+            </div>
+            <div className="mt-2 flex flex-wrap items-center gap-3 text-xs font-semibold">
+              <button type="button" onClick={() => navigate(`/boards/${boardId}/prioritise`)} className="text-primary hover:text-primary/80 transition-colors">
+                Prioritise backlog
+              </button>
+              <button type="button" onClick={openQuickAdd} className="text-base-content/65 hover:text-base-content transition-colors">
+                Quick add task
+              </button>
             </div>
           </div>
           <div className={`flex shrink-0 items-center justify-end min-w-0 ml-auto ${showFilter || filterText ? 'w-full sm:w-auto' : ''}`}>
@@ -431,7 +440,9 @@ export const BoardView = () => {
                   <line x1="17" y1="16" x2="23" y2="16"></line>
                 </svg>
                 <span>Filter</span>
-                <span className="hidden md:inline opacity-60">[{shortcuts.filter?.key?.toUpperCase() ?? 'F'}]</span>
+                <span className="hidden md:inline-flex items-center gap-1 opacity-70">
+                  <kbd className="kbd kbd-xs">{shortcuts.filter?.key?.toUpperCase() ?? 'F'}</kbd>
+                </span>
               </button>
             )}
           </div>
@@ -439,7 +450,7 @@ export const BoardView = () => {
         </div>
       </div>
 
-      <div className="flex-1 min-h-0 flex flex-col min-w-0 rounded-[2rem] border border-primary/15 bg-primary/[0.04] py-2">
+      <div className="flex-1 min-h-0 flex flex-col min-w-0 rounded-[2rem] border border-primary/20 bg-primary/[0.06] py-2">
       <DndContext
         sensors={sensors}
         collisionDetection={closestCorners}
@@ -478,10 +489,10 @@ export const BoardView = () => {
 
           {/* FOCUS: always visible at top — order-1 */}
           {doingStatus && (
-            <div className="order-1 flex-1 min-w-0 flex flex-col gap-3 px-2 w-full rounded-3xl border border-primary/20 bg-primary/[0.07] py-3">
+            <div className="order-1 flex-1 min-w-0 flex flex-col gap-3 px-2 w-full rounded-3xl border border-primary/25 bg-primary/[0.09] py-3">
               <div className="flex items-center gap-3 px-3">
                 <div className="w-2 h-8 rounded-full bg-primary shadow-lg shadow-primary/30" />
-                <h2 className="text-sm font-black uppercase tracking-[0.18em] text-primary">Focus</h2>
+                <h2 className="text-sm font-black uppercase tracking-[0.18em] text-primary">Focus lane</h2>
                 <span className="badge badge-primary badge-sm font-bold" title="One task at a time — swap or finish current to add another">1 slot</span>
                 <span className="text-[11px] tracking-wide opacity-50 hidden sm:inline">Single-task mode</span>
               </div>
