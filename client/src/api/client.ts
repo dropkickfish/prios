@@ -1,4 +1,4 @@
-import type { CardType } from '../types';
+import type { CardType, TagType } from '../types';
 
 /** Use relative path so dev proxy and production same-origin both work. */
 const API_BASE = '/api';
@@ -6,7 +6,7 @@ const API_BASE = '/api';
 async function throwIfNotOk(res: Response): Promise<Response> {
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
-    throw new Error((err as any).error || `HTTP ${res.status}`);
+    throw new Error((err as { error?: string }).error || `HTTP ${res.status}`);
   }
   return res;
 }
@@ -166,7 +166,7 @@ export const apiClient = {
     const res = await fetch(`${API_BASE}/calendar/sync`, { method: 'POST' });
     return (await throwIfNotOk(res)).json();
   },
-  getTags: async (boardId?: string): Promise<any[]> => {
+  getTags: async (boardId?: string): Promise<TagType[]> => {
     const url = new URL(`${API_BASE}/tags`);
     if (boardId) url.searchParams.append('boardId', boardId);
     const res = await fetch(url.toString());

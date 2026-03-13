@@ -61,22 +61,22 @@ const SortableBoardCard = ({ board, index, onEdit }: SortableBoardCardProps) => 
       {...attributes}
       {...listeners}
       onClick={() => navigate(`/boards/${board.id}`)}
-      className={`card bg-base-100 shadow-xl border-t-4 border-${board.colour || 'secondary'} hover:scale-[1.02] transition-transform overflow-hidden cursor-pointer group relative`}
+      className={`card bg-base-100 shadow-sm border border-base-content/10 hover:shadow-xl hover:-translate-y-0.5 transition-all overflow-hidden cursor-pointer group relative`}
     >
-      {/* Board number badge */}
-      <div className="absolute top-3 left-3 badge badge-sm badge-ghost font-black opacity-30">
-        {index + 1}
+      <div className={`absolute inset-x-0 top-0 h-1.5 bg-${board.colour || 'secondary'} opacity-75`} />
+      <div className="absolute top-3 left-3 rounded-full px-2.5 py-1 text-[10px] uppercase tracking-wider font-bold bg-base-200 text-base-content/60">
+        Board {index + 1}
       </div>
 
-      <div className="card-body">
+      <div className="card-body pt-12">
         <div className="flex justify-between items-start">
-          <h2 className="card-title text-2xl font-black">{board.name}</h2>
+          <h2 className="card-title text-2xl font-black tracking-tight">{board.name}</h2>
           <button
             onClick={(e) => {
               e.stopPropagation();
               onEdit(board);
             }}
-            className="btn btn-circle btn-sm btn-ghost opacity-40 hover:opacity-100"
+            className="btn btn-circle btn-sm w-10 h-10 min-h-10 btn-ghost opacity-40 hover:opacity-100"
             title="Board Settings"
             onPointerDown={(e) => e.stopPropagation()} // Prevent drag start
           >
@@ -86,14 +86,24 @@ const SortableBoardCard = ({ board, index, onEdit }: SortableBoardCardProps) => 
             </svg>
           </button>
         </div>
-        <p className="opacity-70 text-sm">Productivity hub for {board.name}.</p>
-        <div className="card-actions justify-end mt-6 gap-3">
+        <div className="flex flex-wrap gap-2 mt-2">
+          {(board.cardCounts?.doing ?? 0) > 0 && (
+            <span className="text-xs font-bold text-primary bg-primary/10 rounded-full px-2.5 py-1">{board.cardCounts!.doing} in focus</span>
+          )}
+          {(board.cardCounts?.maybe ?? 0) > 0 && (
+            <span className="text-xs text-base-content/60 bg-base-200 rounded-full px-2.5 py-1">{board.cardCounts!.maybe} in backlog</span>
+          )}
+          {!(board.cardCounts?.doing) && !(board.cardCounts?.maybe) && (
+            <span className="text-xs text-base-content/45 bg-base-200 rounded-full px-2.5 py-1">No active tasks</span>
+          )}
+        </div>
+        <div className="card-actions justify-end mt-7 gap-2">
           <button
             onClick={(e) => {
               e.stopPropagation();
               navigate(`/boards/${board.id}`);
             }}
-            className="btn btn-sm btn-outline opacity-50 hover:opacity-100"
+            className="btn btn-sm h-10 min-h-10 btn-ghost border border-base-content/15"
             onPointerDown={(e) => e.stopPropagation()}
           >
             View Board
@@ -103,7 +113,7 @@ const SortableBoardCard = ({ board, index, onEdit }: SortableBoardCardProps) => 
               e.stopPropagation();
               navigate(`/boards/${board.id}/prioritise`);
             }}
-            className="btn btn-sm btn-secondary text-white border-none shadow-md shadow-secondary/10"
+            className="btn btn-sm h-10 min-h-10 btn-secondary text-white border-none shadow-md shadow-secondary/10"
             onPointerDown={(e) => e.stopPropagation()}
           >
             Prioritise
@@ -113,7 +123,7 @@ const SortableBoardCard = ({ board, index, onEdit }: SortableBoardCardProps) => 
               e.stopPropagation();
               navigate(`/boards/${board.id}/execute`);
             }}
-            className="btn btn-sm btn-primary text-white border-none shadow-md shadow-primary/30"
+            className="btn btn-sm h-10 min-h-10 btn-primary text-white border-none shadow-md shadow-primary/30"
             onPointerDown={(e) => e.stopPropagation()}
           >
             Execute
@@ -195,19 +205,27 @@ export const Dashboard = () => {
 
   return (
     <div className="space-y-8 text-secondary-content">
-      <div className="flex justify-between items-center">
-        <div>
-          <h1 className="text-4xl font-black text-primary">Dashboard</h1>
-          <p className="opacity-60 text-base-content">Manage your boards and track your progress. {boards.length}/{MAX_BOARDS} boards</p>
+      <div className="rounded-3xl border border-base-content/10 bg-base-100 px-5 py-5 sm:px-7 sm:py-6 shadow-sm">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+          <div className="space-y-1">
+            <p className="text-[11px] uppercase tracking-[0.22em] font-bold text-base-content/55">Workspace</p>
+            <h1 className="text-4xl sm:text-5xl font-black tracking-tight text-primary">Boards</h1>
+            <p className="text-sm text-base-content/70">Choose where to collect, prioritise, and execute work.</p>
+          </div>
+          <button
+            onClick={() => setShowCreateModal(true)}
+            className="btn btn-primary shadow-lg shadow-primary/20 text-white border-none h-11 min-h-11 px-5"
+            disabled={!canCreateBoard}
+            title={!canCreateBoard ? `Maximum ${MAX_BOARDS} boards reached` : 'Create New Board (N)'}
+          >
+            New Board
+          </button>
         </div>
-        <button
-          onClick={() => setShowCreateModal(true)}
-          className="btn btn-primary shadow-lg shadow-primary/20 text-white border-none"
-          disabled={!canCreateBoard}
-          title={!canCreateBoard ? `Maximum ${MAX_BOARDS} boards reached` : 'Create New Board (N)'}
-        >
-          Create New Board
-        </button>
+        <div className="mt-5 flex flex-wrap gap-2 text-[11px] uppercase tracking-wider font-semibold">
+          <span className="rounded-full bg-base-200 px-3 py-1.5 text-base-content/75">{boards.length}/{MAX_BOARDS} active boards</span>
+          <span className="rounded-full bg-primary/10 px-3 py-1.5 text-primary">{boards.reduce((sum, b) => sum + (b.cardCounts?.doing ?? 0), 0)} in focus now</span>
+          <span className="rounded-full bg-base-200 px-3 py-1.5 text-base-content/70">{boards.reduce((sum, b) => sum + (b.cardCounts?.maybe ?? 0), 0)} in backlog</span>
+        </div>
       </div>
 
       {isLoading ? (
@@ -234,9 +252,15 @@ export const Dashboard = () => {
                 />
               ))}
               {boards.length === 0 && (
-                <div className="col-span-full text-center p-20 bg-base-100 rounded-3xl border-2 border-dashed border-base-300">
-                   <p className="text-xl opacity-40 font-bold uppercase tracking-widest">No boards found</p>
-                   <button onClick={() => setShowCreateModal(true)} className="btn btn-ghost btn-sm mt-4">Create your first board</button>
+                <div className="col-span-full text-center p-16 bg-base-100 rounded-3xl border-2 border-dashed border-base-300 flex flex-col items-center gap-4">
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-12 h-12 opacity-20">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 13.5l10.5-11.25L12 10.5h8.25L9.75 21.75 12 13.5H3.75z" />
+                  </svg>
+                  <div>
+                    <p className="text-xl font-black opacity-60">No boards yet</p>
+                    <p className="text-sm opacity-40 mt-1 max-w-xs mx-auto">Boards hold your tasks. Collect work, triage it, then execute one task at a time.</p>
+                  </div>
+                  <button onClick={() => setShowCreateModal(true)} className="btn btn-primary mt-2">Create your first board</button>
                 </div>
               )}
             </div>

@@ -1,0 +1,110 @@
+import type { StatusType, CardType } from '../../types';
+import { CardComponent } from '../../components/CardComponent';
+import { DraggableCard, DroppableColumn } from './BoardViewParts';
+
+interface ArchiveSectionProps {
+  statuses: StatusType[];
+  getCardsByStatus: (id: string) => CardType[];
+  collapsedCategories: string[];
+  archiveCollapsed: boolean;
+  toggleSection: (section: 'backlog' | 'archive') => void;
+  toggleColumn: (category: string) => void;
+  modalOpen: boolean;
+  onCardClick: (card: CardType) => void;
+  onStatusChange: (cardId: string, statusId: string) => void;
+  onSchedule: (card: CardType) => void;
+}
+
+export const ArchiveSection = ({
+  statuses,
+  getCardsByStatus,
+  collapsedCategories,
+  archiveCollapsed,
+  toggleSection,
+  toggleColumn,
+  modalOpen,
+  onCardClick,
+  onStatusChange,
+  onSchedule,
+}: ArchiveSectionProps) => {
+  const doneStatus = statuses.find(s => s.category === 'done');
+  const wontdoStatus = statuses.find(s => s.category === 'wontdo');
+  const archiveStatuses = [doneStatus, wontdoStatus].filter(Boolean) as StatusType[];
+  const archiveCount = archiveStatuses.reduce((sum, s) => sum + getCardsByStatus(s.id).length, 0);
+
+  return (
+    <div className="order-3 flex-shrink-0 flex flex-col gap-4 transition-all duration-300 w-full rounded-3xl border border-success/20 bg-success/5 p-3 sm:p-4">
+      {archiveCollapsed ? (
+        <button
+          type="button"
+          onClick={() => toggleSection('archive')}
+          className="w-full min-h-[56px] rounded-2xl bg-base-200/70 border border-base-content/10 flex items-center justify-between gap-3 px-4 py-3 hover:bg-base-200 transition-colors text-left"
+        >
+          <div className="flex items-center gap-2 min-w-0">
+            <span className="text-[11px] font-bold tracking-wide text-base-content/80">Archive</span>
+            <span className="badge badge-sm badge-ghost font-bold">{archiveCount}</span>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <span className="text-[11px] tracking-wide text-base-content/65">Tap to expand</span>
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="opacity-45">
+              <polyline points="6 9 12 15 18 9" />
+            </svg>
+          </div>
+        </button>
+      ) : (
+        <div className="flex flex-col gap-4 w-full min-w-0">
+          <div className="flex items-center justify-between gap-2 w-full px-1">
+            <button
+              type="button"
+              onClick={() => toggleSection('archive')}
+              className="btn btn-ghost h-11 min-h-11 px-3 rounded-xl gap-2 justify-start min-w-0"
+              aria-label="Collapse archive"
+            >
+              <span className="text-[11px] font-bold tracking-wide text-base-content/80">Archive</span>
+              <span className="badge badge-sm badge-ghost font-bold">{archiveCount}</span>
+              <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="opacity-60">
+                <polyline points="18 15 12 9 6 15" />
+              </svg>
+            </button>
+            <div className="min-w-0" aria-hidden />
+          </div>
+          <div className="flex flex-col gap-4 w-full min-w-0">
+            {archiveStatuses.map(status => {
+              const isCollapsed = collapsedCategories.includes(status.category);
+              return (
+                <div key={status.id} className="flex flex-col gap-3 flex-shrink-0 transition-all w-full min-w-0">
+                  <div className="flex items-center justify-between gap-2 px-1 w-full">
+                    <button type="button" onClick={() => toggleColumn(status.category)} className="btn btn-ghost h-11 min-h-11 px-3 rounded-xl gap-2 text-left min-w-0 justify-start">
+                      <span className="text-[11px] font-semibold tracking-wide text-base-content/80">{status.name}</span>
+                      <span className="badge badge-ghost badge-sm font-bold">{getCardsByStatus(status.id).length}</span>
+                      <span className="text-[10px] uppercase tracking-wide opacity-45 hidden sm:inline">{isCollapsed ? 'Expand' : 'Collapse'}</span>
+                      <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={`opacity-50 transition-transform ${isCollapsed ? '' : 'rotate-180'}`}>
+                        <polyline points="6 9 12 15 18 9" />
+                      </svg>
+                    </button>
+                  </div>
+                  {!isCollapsed && (
+                    <DroppableColumn statusId={status.id}>
+                      {getCardsByStatus(status.id).map(card => (
+                        <DraggableCard key={card.id} card={card}>
+                          <CardComponent
+                            card={card}
+                            statuses={statuses}
+                            showActions={true}
+                            onClick={() => !modalOpen && onCardClick(card)}
+                            onStatusChange={(_, newStatusId) => onStatusChange(card.id, newStatusId)}
+                            onSchedule={onSchedule}
+                          />
+                        </DraggableCard>
+                      ))}
+                    </DroppableColumn>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};

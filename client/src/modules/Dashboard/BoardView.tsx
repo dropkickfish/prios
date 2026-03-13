@@ -11,9 +11,8 @@ import {
   closestCorners,
   defaultDropAnimationSideEffects,
   type DragEndEvent,
-  type DragStartEvent
+  type DragStartEvent,
 } from '@dnd-kit/core';
-import { useDraggable, useDroppable } from '@dnd-kit/core';
 import type { BoardType, StatusType, CardType } from '../../types';
 import { apiClient } from '../../api/client';
 import { queryKeys } from '../../api/queryKeys';
@@ -28,50 +27,10 @@ import { ScheduleTimeStrip } from './ScheduleTimeStrip';
 import { QuickCaptureBar } from './QuickCaptureBar';
 import { CommandBar } from './CommandBar';
 import { useShortcut, useKeyboard } from '../../context/KeyboardContext';
+import { DraggableCard, DroppableColumn } from './BoardViewParts';
+import { BacklogSection } from './BacklogSection';
+import { ArchiveSection } from './ArchiveSection';
 
-interface DraggableCardProps {
-  card: CardType;
-  children: React.ReactNode;
-}
-
-const DraggableCard = ({ card, children }: DraggableCardProps) => {
-  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
-    id: card.id,
-    data: { card }
-  });
-
-  const style = transform ? {
-    transform: `translate3d(${transform.x}px, ${transform.y}px, 0)`,
-  } : undefined;
-
-  return (
-    <div ref={setNodeRef} style={style} {...listeners} {...attributes} className={isDragging ? 'opacity-30' : ''}>
-      {children}
-    </div>
-  );
-};
-
-interface DroppableColumnProps {
-  statusId: string;
-  isCollapsed?: boolean;
-  children: React.ReactNode;
-  className?: string;
-}
-
-const DroppableColumn = ({ statusId, children, className = '' }: DroppableColumnProps) => {
-  const { setNodeRef, isOver } = useDroppable({
-    id: statusId,
-  });
-
-  return (
-    <div
-      ref={setNodeRef}
-      className={`flex flex-col gap-3 p-2 bg-base-200/30 rounded-[1.5rem] min-h-[250px] border transition-colors shadow-[inset_0_2px_10px_rgba(0,0,0,0.05)] backdrop-blur-sm ${isOver ? 'border-primary/50 bg-primary/5' : 'border-base-content/5'} ${className}`}
-    >
-      {children}
-    </div>
-  );
-};
 
 export const BoardView = () => {
   const { boardId } = useParams<{ boardId: string }>();
@@ -119,6 +78,8 @@ export const BoardView = () => {
   const [focusConflict, setFocusConflict] = useState<{ cardToMove: CardType; currentDoing: CardType } | null>(null);
   const [showCommandBar, setShowCommandBar] = useState(false);
   const [showQuickAddBar, setShowQuickAddBar] = useState(false);
+  const [showTriagePrompt, setShowTriagePrompt] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const { shortcuts } = useKeyboard();
 
   const { data: boards = [] } = useQuery<BoardType[]>({
@@ -153,6 +114,13 @@ export const BoardView = () => {
     }
   }, [boards, boardId]);
 
+  useEffect(() => {
+    if (errorMessage) {
+      const t = setTimeout(() => setErrorMessage(null), 4000);
+      return () => clearTimeout(t);
+    }
+  }, [errorMessage]);
+
   // Non-blocking calendar sync on mount
   useEffect(() => {
     if (!boardId) return;
@@ -179,7 +147,6 @@ export const BoardView = () => {
     const firstMaybe = statuses.find(s => s.category === 'maybe');
     if (!firstMaybe || showCreateModal || viewerCard || schedulingCard) return;
     setSelectedStatusId(firstMaybe.id);
-    setShowCreateModal(true);
     setShowQuickAddBar(true);
   };
 
@@ -203,7 +170,6 @@ export const BoardView = () => {
     const firstMaybe = statuses.find(s => s.category === 'maybe');
     if (firstMaybe && !showCreateModal && !viewerCard && !schedulingCard) {
       setSelectedStatusId(firstMaybe.id);
-      setShowCreateModal(true);
       setShowQuickAddBar(true);
     }
   });
@@ -225,14 +191,10 @@ export const BoardView = () => {
       await updateCardMutation.mutateAsync({ cardId, statusId: newStatusId });
 
       if (newStatus?.category === 'done') {
-        setTimeout(() => {
-          if (window.confirm("Great job! Want to triage your backlog now?")) {
-            navigate(`/boards/${boardId}/prioritise`);
-          }
-        }, 500);
+        setTimeout(() => setShowTriagePrompt(true), 500);
       }
     } catch (err: unknown) {
-      alert(err instanceof Error ? err.message : 'Failed to update status');
+      setErrorMessage(err instanceof Error ? err.message : 'Failed to update status');
     }
   };
 
@@ -249,7 +211,7 @@ export const BoardView = () => {
       setFocusConflict(null);
       queryClient.invalidateQueries({ queryKey: queryKeys.cards(boardId) });
     } catch (err: unknown) {
-      alert(err instanceof Error ? err.message : 'Failed to update');
+      setErrorMessage(err instanceof Error ? err.message : 'Failed to update');
     }
   };
 
@@ -376,6 +338,28 @@ export const BoardView = () => {
           </div>
         </div>
       )}
+      {showTriagePrompt && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-base-content/30 backdrop-blur-sm" onClick={() => setShowTriagePrompt(false)}>
+          <div className="bg-base-100 rounded-2xl p-6 max-w-sm w-full shadow-2xl border border-base-content/10" onClick={e => e.stopPropagation()}>
+            <p className="text-lg font-black">Task complete!</p>
+            <p className="text-sm opacity-70 mt-1">Want to triage your backlog now?</p>
+            <div className="flex gap-2 mt-4">
+              <button className="btn btn-primary flex-1" onClick={() => { setShowTriagePrompt(false); navigate(`/boards/${boardId}/prioritise`); }}>
+                Triage Backlog
+              </button>
+              <button className="btn btn-ghost flex-1 border border-base-content/20" onClick={() => setShowTriagePrompt(false)}>
+                Not now
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {errorMessage && (
+        <div className="fixed bottom-24 left-1/2 -translate-x-1/2 z-[70] alert alert-error shadow-lg max-w-sm w-full" role="alert">
+          <span className="text-sm flex-1">{errorMessage}</span>
+          <button className="btn btn-ghost btn-xs" onClick={() => setErrorMessage(null)}>Dismiss</button>
+        </div>
+      )}
       {showSettingsModal && board && (
         <BoardSettingsModal
           board={board}
@@ -383,7 +367,7 @@ export const BoardView = () => {
             setShowSettingsModal(false);
             queryClient.invalidateQueries({ queryKey: queryKeys.boards() });
           }}
-          onUpdated={(updatedBoard) => {
+          onUpdated={() => {
             queryClient.invalidateQueries({ queryKey: queryKeys.boards() });
             setShowSettingsModal(false);
           }}
@@ -405,36 +389,39 @@ export const BoardView = () => {
           }}
         />
       )}
-      <div className="space-y-3 px-4 sm:px-6">
+      <div className="px-4 sm:px-6">
+        <div className="rounded-3xl border border-base-content/10 bg-base-100 px-4 py-4 sm:px-5 sm:py-5 shadow-sm">
         <div className="flex flex-wrap justify-between items-start gap-x-6 gap-y-3">
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2 flex-wrap">
               <BoardSwitcher currentBoard={board} onSwitch={(id) => navigate(`/boards/${id}`)} />
-              <button onClick={() => setShowSettingsModal(true)} className="btn btn-ghost btn-circle btn-sm shrink-0" title="Board settings">
+              <button onClick={() => setShowSettingsModal(true)} className="btn btn-ghost btn-circle btn-sm w-11 h-11 min-h-11 shrink-0" title="Board settings">
                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87.074.04.147.083.22.127.324.196.72.257 1.075.124l1.217-.456a1.125 1.125 0 011.37.49l1.296 2.247a1.125 1.125 0 01-.26 1.431l-1.003.827c-.293.24-.438.613-.431.992a6.759 6.759 0 010 .255c-.007.378.138.75.43.99l1.005.828c.424.35.534.954.26 1.43l-1.298 2.247a1.125 1.125 0 01-1.369.491l-1.217-.456c-.355-.133-.75-.072-1.076.124a6.57 6.57 0 01-.22.128c-.331.183-.581.495-.644.869l-.213 1.28c-.09.543-.56.941-1.11.941h-2.594c-.55 0-1.02-.398-1.11-.94l-.213-1.281c-.062-.374-.312-.686-.644-.87a6.52 6.52 0 01-.22-.127c-.325-.196-.72-.257-1.076-.124l-1.217.456a1.125 1.125 0 01-1.369-.49l-1.297-2.247a1.125 1.125 0 01.26-1.431l1.004-.827c.292-.24.437-.613.43-.992a6.932 6.932 0 010-.255c.007-.378-.138-.75-.43-.99l-1.004-.828a1.125 1.125 0 01-.26-1.43l1.297-2.247a1.125 1.125 0 011.37-.491l1.216.456c.356.133.751.072 1.076-.124.072-.044.146-.087.22-.128.332-.183.582-.495.644-.869l.214-1.281z" />
                   <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                 </svg>
               </button>
             </div>
-            <div className="flex items-center gap-2 opacity-50 text-xs font-bold uppercase tracking-widest mt-1">
+            <div className="mt-2 inline-flex items-center gap-2 rounded-full bg-base-200 px-3 py-1.5 text-[11px] font-semibold tracking-wide text-base-content/70">
               <span className={`w-2 h-2 rounded-full animate-pulse bg-${board.colour || 'primary'}`}></span>
-              Mission Control
+              {doingStatus && getCardsByStatus(doingStatus.id).length > 0 ? '1 task in focus' : 'Focus slot empty'}
             </div>
           </div>
-          <div className="flex shrink-0 items-center justify-end min-w-0 ml-auto">
+          <div className={`flex shrink-0 items-center justify-end min-w-0 ml-auto ${showFilter || filterText ? 'w-full sm:w-auto' : ''}`}>
             {showFilter || filterText ? (
-              <FilterBar
-                value={filterText}
-                onFilterChange={setFilterText}
-                onClose={() => setShowFilter(false)}
-                focusOnOpen={showFilter}
-              />
+              <div className="w-full sm:w-[22rem]">
+                <FilterBar
+                  value={filterText}
+                  onFilterChange={setFilterText}
+                  onClose={() => setShowFilter(false)}
+                  focusOnOpen={showFilter}
+                />
+              </div>
             ) : (
               <button
                 type="button"
                 onClick={() => setShowFilter(true)}
-                className="btn btn-ghost btn-sm rounded-full gap-2 opacity-70 hover:opacity-100"
+                className="btn btn-ghost btn-sm h-11 min-h-11 rounded-full gap-2 opacity-80 hover:opacity-100 px-4"
               >
                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <line x1="4" y1="21" x2="4" y2="14"></line><line x1="4" y1="10" x2="4" y2="3"></line>
@@ -443,14 +430,16 @@ export const BoardView = () => {
                   <line x1="1" y1="14" x2="7" y2="14"></line><line x1="9" y1="8" x2="15" y2="8"></line>
                   <line x1="17" y1="16" x2="23" y2="16"></line>
                 </svg>
-                Filter [{shortcuts.filter.key.toUpperCase()}]
+                <span>Filter</span>
+                <span className="hidden md:inline opacity-60">[{shortcuts.filter?.key?.toUpperCase() ?? 'F'}]</span>
               </button>
             )}
           </div>
         </div>
+        </div>
       </div>
 
-      <div className="flex-1 min-h-0 flex flex-col min-w-0">
+      <div className="flex-1 min-h-0 flex flex-col min-w-0 rounded-[2rem] border border-primary/15 bg-primary/[0.04] py-2">
       <DndContext
         sensors={sensors}
         collisionDetection={closestCorners}
@@ -458,7 +447,7 @@ export const BoardView = () => {
         onDragEnd={handleDragEnd}
       >
       <div className="flex-1 min-h-0 overflow-y-auto">
-      <div className="space-y-4 px-4 sm:px-6 pb-12 min-h-0">
+      <div className="space-y-4 px-4 sm:px-6 pb-32 md:pb-12 min-h-0">
         {/* Scheduled: expandable calendar at top (all breakpoints; desktop defaults expanded) */}
         <ScheduleTimeStrip
             cards={cards}
@@ -469,98 +458,36 @@ export const BoardView = () => {
 
         <div className="flex flex-col gap-4 min-h-[50vh] items-stretch">
           {/* Backlog: expandable — order-2, always stacked */}
-          {(() => {
-            const maybeStatus = statuses.find(s => s.category === 'maybe');
-            const schedStatus = statuses.find(s => s.category === 'scheduled');
-            const backlogStatuses = [maybeStatus, schedStatus].filter(Boolean) as StatusType[];
-            const backlogCount = backlogStatuses.reduce((sum, s) => sum + getCardsByStatus(s.id).length, 0);
-            return (
-              <div className={`order-2 flex-shrink-0 flex flex-col gap-4 transition-all duration-300 w-full ${backlogCollapsed ? '' : ''}`}>
-                {backlogCollapsed ? (
-                  <button
-                    type="button"
-                    onClick={() => toggleSection('backlog')}
-                    className="w-full min-h-[56px] rounded-2xl bg-base-200/60 border border-base-content/10 flex flex-row items-center justify-center gap-2 py-3 lg:py-4 hover:bg-base-200 transition-colors"
-                  >
-                    <span className="text-[10px] font-black uppercase tracking-widest opacity-60">Backlog</span>
-                    <span className="badge badge-sm badge-ghost font-bold">{backlogCount}</span>
-                  </button>
-                ) : (
-                  <div className="flex flex-col gap-4 w-full min-w-0">
-                    {/* Section header: symmetrical, collapse centred */}
-                    <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2 w-full px-1">
-                      <div className="flex items-center gap-2 justify-start min-w-0">
-                        <span className="text-[10px] font-black uppercase tracking-widest opacity-60">Backlog</span>
-                        <span className="badge badge-sm badge-ghost font-bold">{backlogCount}</span>
-                      </div>
-                      <button type="button" onClick={() => toggleSection('backlog')} className="btn btn-ghost btn-xs gap-1.5 opacity-60 hover:opacity-100 justify-self-center" aria-label="Collapse backlog">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="18 15 12 9 6 15"/></svg>
-                        <span className="text-[10px] uppercase">Collapse</span>
-                      </button>
-                      <div className="flex items-center justify-end min-w-0">
-                        <button type="button" onClick={() => navigate(`/boards/${boardId}/prioritise`)} className="btn btn-xs btn-ghost gap-1.5 opacity-70 hover:opacity-100 shrink-0" title="Prioritise backlog (tinder-style swipe)">
-                          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4 shrink-0"><path strokeLinecap="round" strokeLinejoin="round" d="M3.75 13.5l10.5-11.25L12 10.5h8.25L9.75 21.75 12 13.5H3.75z" /></svg>
-                          <span className="text-[10px] font-bold uppercase hidden sm:inline">Prioritise</span>
-                        </button>
-                      </div>
-                    </div>
-                    <div className="flex flex-col gap-4 w-full min-w-0">
-                    {backlogStatuses.map(status => {
-                      const isCollapsed = collapsedCategories.includes(status.category);
-                      return (
-                        <div key={status.id} className="flex flex-col gap-3 flex-shrink-0 transition-all w-full min-w-0">
-                          <div className="flex items-center justify-between gap-2 px-1 w-full">
-                            <button type="button" onClick={() => toggleColumn(status.category)} className="btn btn-ghost btn-xs gap-2 p-1 text-left min-w-0">
-                              <span className="text-[10px] font-black uppercase tracking-widest opacity-60">{statusDisplayName(status)}</span>
-                              <span className="badge badge-ghost badge-sm font-bold">{getCardsByStatus(status.id).length}</span>
-                            </button>
-                            <button type="button" onClick={() => toggleColumn(status.category)} className="btn btn-ghost btn-circle btn-xs opacity-50 hover:opacity-100 shrink-0" aria-label={`Collapse ${statusDisplayName(status)}`}>
-                              <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="18 15 12 9 6 15"/></svg>
-                            </button>
-                          </div>
-                          {!isCollapsed && (
-                            <DroppableColumn statusId={status.id}>
-                              {getCardsByStatus(status.id).map(card => (
-                                <DraggableCard key={card.id} card={card}>
-                                  <CardComponent
-                                    card={card}
-                                    statuses={statuses}
-                                    variant="backlog"
-                                    showActions={true}
-                                    onClick={() => !(showCreateModal || viewerCard || schedulingCard) && setViewerCardId(card.id)}
-                                    onStatusChange={(_, newStatusId) => handleStatusChange(card.id, newStatusId)}
-                                    onSchedule={handleSchedule}
-                                  />
-                                </DraggableCard>
-                              ))}
-                              {status.category === 'maybe' && (
-                                <button disabled={!!(showCreateModal || viewerCard || schedulingCard)} onClick={() => { setSelectedStatusId(status.id); setShowCreateModal(true); }}
-                                  className="btn btn-ghost btn-sm py-3 opacity-40 hover:opacity-100 border-dashed border-2 border-base-content/20 rounded-xl w-full text-[10px] uppercase font-black">+ Add</button>
-                              )}
-                            </DroppableColumn>
-                          )}
-                        </div>
-                      );
-                    })}
-                    </div>
-                  </div>
-                )}
-              </div>
-            );
-          })()}
+          <BacklogSection
+            statuses={statuses}
+            getCardsByStatus={getCardsByStatus}
+            collapsedCategories={collapsedCategories}
+            backlogCollapsed={backlogCollapsed}
+            toggleSection={toggleSection}
+            toggleColumn={toggleColumn}
+            boardId={boardId!}
+            navigateToPrioritise={() => navigate(`/boards/${boardId}/prioritise`)}
+            modalOpen={!!(showCreateModal || viewerCard || schedulingCard)}
+            setSelectedStatusId={setSelectedStatusId}
+            setShowCreateModal={setShowCreateModal}
+            onCardClick={(card) => setViewerCardId(card.id)}
+            onStatusChange={(cardId, newStatusId) => handleStatusChange(cardId, newStatusId)}
+            onSchedule={handleSchedule}
+            statusDisplayName={statusDisplayName}
+          />
 
           {/* FOCUS: always visible at top — order-1 */}
           {doingStatus && (
-            <div className="order-1 flex-1 min-w-0 flex flex-col gap-3 px-2 w-full">
-              <div className="flex items-center gap-3 px-2">
+            <div className="order-1 flex-1 min-w-0 flex flex-col gap-3 px-2 w-full rounded-3xl border border-primary/20 bg-primary/[0.07] py-3">
+              <div className="flex items-center gap-3 px-3">
                 <div className="w-2 h-8 rounded-full bg-primary shadow-lg shadow-primary/30" />
-                <h2 className="text-sm font-black uppercase tracking-[0.25em] text-primary">FOCUS</h2>
+                <h2 className="text-sm font-black uppercase tracking-[0.18em] text-primary">Focus</h2>
                 <span className="badge badge-primary badge-sm font-bold" title="One task at a time — swap or finish current to add another">1 slot</span>
-                <span className="text-[10px] uppercase tracking-widest opacity-40 hidden sm:inline">One at a time</span>
+                <span className="text-[11px] tracking-wide opacity-50 hidden sm:inline">Single-task mode</span>
               </div>
-              <div className="flex-1 min-h-0 flex flex-col max-h-[42vh] md:max-h-none">
+              <div className="flex-1 min-h-0 flex flex-col max-h-[45vh] md:max-h-none">
                 <DroppableColumn statusId={doingStatus.id} className="flex-1 min-h-0 overflow-hidden">
-                  <div className="min-h-0 flex-1 rounded-2xl border-2 border-primary/30 bg-primary/5 p-4 flex flex-col overflow-hidden">
+                  <div className="min-h-0 flex-1 rounded-2xl border-2 border-primary/25 bg-base-100 p-4 flex flex-col overflow-y-auto">
                     {getCardsByStatus(doingStatus.id).map(card => (
                       <div key={card.id} className="flex-1 min-h-0 flex flex-col overflow-hidden">
                         <DraggableCard card={card}>
@@ -577,8 +504,8 @@ export const BoardView = () => {
                       </div>
                     ))}
                     {getCardsByStatus(doingStatus.id).length === 0 && (
-                      <div className="flex flex-col items-center justify-center py-12 text-center opacity-50 flex-1">
-                        <p className="text-sm font-bold uppercase tracking-widest">No focus task</p>
+                      <div className="flex flex-col items-center justify-center py-12 text-center opacity-70 flex-1">
+                        <p className="text-sm font-bold">No focus task yet</p>
                         <p className="text-xs mt-1">Move one from Backlog or start triage</p>
                         <button type="button" onClick={() => navigate(`/boards/${boardId}/prioritise`)} className="btn btn-primary btn-sm mt-4">Triage Backlog</button>
                       </div>
@@ -590,68 +517,18 @@ export const BoardView = () => {
           )}
 
           {/* Archive: expandable — order-3, always stacked */}
-          {(() => {
-            const doneStatus = statuses.find(s => s.category === 'done');
-            const wontdoStatus = statuses.find(s => s.category === 'wontdo');
-            const archiveStatuses = [doneStatus, wontdoStatus].filter(Boolean) as StatusType[];
-            const archiveCount = archiveStatuses.reduce((sum, s) => sum + getCardsByStatus(s.id).length, 0);
-            return (
-              <div className="order-3 flex-shrink-0 flex flex-col gap-4 transition-all duration-300 w-full">
-                {archiveCollapsed ? (
-                  <button type="button" onClick={() => toggleSection('archive')}
-                    className="w-full min-h-[56px] rounded-2xl bg-base-200/60 border border-base-content/10 flex flex-row items-center justify-center gap-2 py-3 lg:py-4 hover:bg-base-200 transition-colors">
-                    <span className="text-[10px] font-black uppercase tracking-widest opacity-60">Archive</span>
-                    <span className="badge badge-sm badge-ghost font-bold">{archiveCount}</span>
-                  </button>
-                ) : (
-                  <div className="flex flex-col gap-4 w-full min-w-0">
-                    {/* Section header: symmetrical, collapse centred */}
-                    <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2 w-full px-1">
-                      <div className="flex items-center gap-2 justify-start min-w-0">
-                        <span className="text-[10px] font-black uppercase tracking-widest opacity-60">Archive</span>
-                        <span className="badge badge-sm badge-ghost font-bold">{archiveCount}</span>
-                      </div>
-                      <button type="button" onClick={() => toggleSection('archive')} className="btn btn-ghost btn-xs gap-1.5 opacity-60 hover:opacity-100 justify-self-center" aria-label="Collapse archive">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="18 15 12 9 6 15"/></svg>
-                        <span className="text-[10px] uppercase">Collapse</span>
-                      </button>
-                      <div className="min-w-0" aria-hidden />
-                    </div>
-                    <div className="flex flex-col gap-4 w-full min-w-0">
-                    {archiveStatuses.map(status => {
-                      const isCollapsed = collapsedCategories.includes(status.category);
-                      return (
-                        <div key={status.id} className="flex flex-col gap-3 flex-shrink-0 transition-all w-full min-w-0">
-                          <div className="flex items-center justify-between gap-2 px-1 w-full">
-                            <button type="button" onClick={() => toggleColumn(status.category)} className="btn btn-ghost btn-xs gap-2 p-1 text-left min-w-0">
-                              <span className="text-[10px] font-black uppercase tracking-widest opacity-60">{status.name}</span>
-                              <span className="badge badge-ghost badge-sm font-bold">{getCardsByStatus(status.id).length}</span>
-                            </button>
-                            <button type="button" onClick={() => toggleColumn(status.category)} className="btn btn-ghost btn-circle btn-xs opacity-50 hover:opacity-100 shrink-0" aria-label={`Collapse ${status.name}`}>
-                              <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="18 15 12 9 6 15"/></svg>
-                            </button>
-                          </div>
-                          {!isCollapsed && (
-                            <DroppableColumn statusId={status.id}>
-                              {getCardsByStatus(status.id).map(card => (
-                                <DraggableCard key={card.id} card={card}>
-                                  <CardComponent card={card} statuses={statuses} showActions={true}
-                                    onClick={() => !(showCreateModal || viewerCard || schedulingCard) && setViewerCardId(card.id)}
-                                    onStatusChange={(_, newStatusId) => handleStatusChange(card.id, newStatusId)}
-                                    onSchedule={handleSchedule} />
-                                </DraggableCard>
-                              ))}
-                            </DroppableColumn>
-                          )}
-                        </div>
-                      );
-                    })}
-                    </div>
-                  </div>
-                )}
-              </div>
-            );
-          })()}
+          <ArchiveSection
+            statuses={statuses}
+            getCardsByStatus={getCardsByStatus}
+            collapsedCategories={collapsedCategories}
+            archiveCollapsed={archiveCollapsed}
+            toggleSection={toggleSection}
+            toggleColumn={toggleColumn}
+            modalOpen={!!(showCreateModal || viewerCard || schedulingCard)}
+            onCardClick={(card) => setViewerCardId(card.id)}
+            onStatusChange={(cardId, newStatusId) => handleStatusChange(cardId, newStatusId)}
+            onSchedule={handleSchedule}
+          />
         </div>
         </div>
         </div>
@@ -693,16 +570,27 @@ export const BoardView = () => {
         <>
           {/* + button: always visible when quick-add bar is closed (mobile + desktop) */}
           {!showQuickAddBar && (
-            <div className="fixed bottom-20 right-4 z-[60] md:bottom-6 md:right-6">
+            <div className="fixed right-4 z-[60] bottom-[calc(env(safe-area-inset-bottom)+4.75rem)] md:bottom-6 md:right-6">
               <button
                 type="button"
                 onClick={openQuickAdd}
-                className="btn btn-primary btn-circle shadow-lg shadow-primary/30 w-14 h-14 md:w-16 md:h-16 text-2xl border-0"
+                className="btn btn-primary btn-circle shadow-lg shadow-primary/30 w-12 h-12 md:w-16 md:h-16 text-2xl border-0"
                 title={`New card (${shortcuts.new_card?.key ? shortcuts.new_card.key.toUpperCase() : 'N'})`}
               >
                 +
               </button>
             </div>
+          )}
+          {showQuickAddBar && (
+            <button
+              type="button"
+              className="fixed inset-0 z-[59] bg-base-content/20"
+              aria-label="Close quick add"
+              onClick={() => {
+                setShowQuickAddBar(false);
+                setSelectedStatusId(null);
+              }}
+            />
           )}
           {/* Slide-up "What needs doing" panel — visible when + clicked or new_card shortcut */}
           <div
@@ -717,7 +605,6 @@ export const BoardView = () => {
                   type="button"
                   onClick={() => {
                     setShowQuickAddBar(false);
-                    setShowCreateModal(false);
                     setSelectedStatusId(null);
                   }}
                   className="btn btn-ghost btn-circle btn-sm"
@@ -740,6 +627,8 @@ export const BoardView = () => {
                     priority: 3,
                   });
                   queryClient.invalidateQueries({ queryKey: queryKeys.cards(boardId) });
+                  setShowQuickAddBar(false);
+                  setSelectedStatusId(null);
                 }}
               />
             </div>

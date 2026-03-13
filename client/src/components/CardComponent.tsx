@@ -167,9 +167,6 @@ export const CardComponent = ({ card, statuses, onStatusChange, onClick, onSched
                     </div>
                   )}
                 </div>
-                <p className="text-[10px] opacity-40 pt-1 border-t border-base-content/5 shrink-0 mt-1">
-                  Click to open full details
-                </p>
               </>
             ) : (
               <>
@@ -218,11 +215,6 @@ export const CardComponent = ({ card, statuses, onStatusChange, onClick, onSched
                       </span>
                     ))}
                   </div>
-                )}
-                {!showFullDescription && (
-                  <p className={`text-[10px] opacity-40 pt-1 border-t border-base-content/5 shrink-0 ${useFullHeight && isDoing ? 'mt-auto' : ''}`}>
-                    Click to open full details
-                  </p>
                 )}
               </>
             )}

@@ -5,6 +5,7 @@ export interface BoardType {
   availabilitySchedule: any;
   colour?: string;
   schedulingWindowDays?: number;
+  cardCounts?: Record<string, number>;
 }
 
 export interface StatusType {

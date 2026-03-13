@@ -51,6 +51,7 @@ export function ScheduleTimeStrip({
   const weekCards = scheduledCards.filter(
     (c) => getCardBucket(c) === 'week' && matchesFilter(c)
   );
+  const totalScheduled = todayCards.length + tomorrowCards.length + weekCards.length;
 
   if (!scheduledStatusId) return null;
 
@@ -101,30 +102,36 @@ export function ScheduleTimeStrip({
 
   return (
     <div
-      className={`rounded-2xl border border-base-content/5 bg-base-200/40 overflow-hidden w-full ${className}`}
+      className={`rounded-3xl border border-info/20 bg-info/5 overflow-hidden w-full ${className}`}
     >
         <button
           type="button"
           onClick={() => setScheduledExpanded((e) => !e)}
-          className="w-full flex items-center justify-between gap-2 p-4 hover:bg-base-200/60 transition-colors text-left"
+          className="w-full min-h-[56px] flex items-center justify-between gap-3 px-4 py-3 hover:bg-base-200/60 transition-colors text-left"
         >
-          <span className="text-[10px] font-black uppercase tracking-widest opacity-50 min-w-0">
-            Scheduled
-          </span>
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            width="16"
-            height="16"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            className={`shrink-0 opacity-50 transition-transform ${scheduledExpanded ? 'rotate-180' : ''}`}
-          >
-            <polyline points="6 9 12 15 18 9" />
-          </svg>
+          <div className="flex items-center gap-2 min-w-0">
+            <span className="text-[11px] font-semibold tracking-wide text-base-content/80 min-w-0">
+              Scheduled
+            </span>
+            <span className="badge badge-sm badge-ghost font-bold">{totalScheduled}</span>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <span className="text-[11px] tracking-wide text-base-content/65">{scheduledExpanded ? 'Tap to collapse' : 'Tap to expand'}</span>
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              className={`shrink-0 opacity-50 transition-transform ${scheduledExpanded ? 'rotate-180' : ''}`}
+            >
+              <polyline points="6 9 12 15 18 9" />
+            </svg>
+          </div>
         </button>
         {scheduledExpanded && (
           <div className="flex flex-col gap-4 px-4 pb-4 pt-5 border-t border-base-content/5 w-full">

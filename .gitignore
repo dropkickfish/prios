@@ -4,3 +4,4 @@ node_modules
 planning/*
 server/sqlite.db
 .claude/*
+.cursor/*

@@ -1,10 +1,29 @@
 import type { FastifyPluginAsync } from 'fastify';
 import { db, schema } from '../db.js';
-import { eq, or, inArray } from 'drizzle-orm';
+import { eq, or, inArray, sql } from 'drizzle-orm';
 
 const boardsRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.get('/boards', async () => {
-    return await db.select().from(schema.boards).orderBy(schema.boards.order);
+    const boards = await db.select().from(schema.boards).orderBy(schema.boards.order);
+    if (boards.length === 0) return boards;
+
+    const countRows = await db
+      .select({
+        boardId: schema.statuses.boardId,
+        category: schema.statuses.category,
+        count: sql<number>`count(${schema.cards.id})`.as('count'),
+      })
+      .from(schema.statuses)
+      .leftJoin(schema.cards, eq(schema.cards.statusId, schema.statuses.id))
+      .where(inArray(schema.statuses.boardId, boards.map(b => b.id)))
+      .groupBy(schema.statuses.boardId, schema.statuses.category);
+
+    return boards.map(board => ({
+      ...board,
+      cardCounts: Object.fromEntries(
+        countRows.filter(r => r.boardId === board.id).map(r => [r.category, Number(r.count)])
+      ),
+    }));
   });
 
   fastify.post('/boards', async (request) => {

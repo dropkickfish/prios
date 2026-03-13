@@ -17,9 +17,9 @@ export const Layout = ({ children }: LayoutProps) => {
             className="btn btn-ghost text-xl font-bold gap-2 cursor-pointer"
           >
             <svg width="24" height="24" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <rect x="10" y="18" width="20" height="20" rx="4" transform="rotate(-10 10 18)" fill="#C6B3D3"/>
-              <rect x="12" y="12" width="20" height="20" rx="4" transform="rotate(-5 12 12)" fill="#A3E1E7"/>
-              <rect x="15" y="5" width="20" height="20" rx="4" fill="#3BD3E4"/>
+              <rect x="10" y="18" width="20" height="20" rx="4" transform="rotate(-10 10 18)" className="fill-secondary/50"/>
+              <rect x="12" y="12" width="20" height="20" rx="4" transform="rotate(-5 12 12)" className="fill-primary/40"/>
+              <rect x="15" y="5" width="20" height="20" rx="4" className="fill-primary"/>
             </svg>
             Prios
           </button>

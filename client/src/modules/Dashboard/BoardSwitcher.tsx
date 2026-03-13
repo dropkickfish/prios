@@ -52,7 +52,8 @@ export const BoardSwitcher = ({ currentBoard, onSwitch }: BoardSwitcherProps) =>
     <div className="relative" ref={dropdownRef}>
       <button 
         onClick={() => setIsOpen(!isOpen)}
-        className={`text-4xl font-black tracking-tight hover:opacity-80 transition-opacity flex items-center gap-2 group text-${currentBoard.colour || 'base-content'}`}
+        className={`min-h-[44px] px-1 text-2xl sm:text-4xl font-black tracking-tight hover:opacity-80 transition-opacity flex items-center gap-2 group text-${currentBoard.colour || 'base-content'}`}
+        aria-label="Switch board"
       >
         {currentBoard.name}
         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-6 h-6 opacity-30 group-hover:opacity-100 transition-opacity">
@@ -61,7 +62,7 @@ export const BoardSwitcher = ({ currentBoard, onSwitch }: BoardSwitcherProps) =>
       </button>
 
       {isOpen && (
-        <div className="absolute top-full left-0 mt-2 w-80 bg-base-100 shadow-2xl rounded-2xl border border-base-content/10 overflow-hidden z-50 p-2 transform origin-top-left transition-all">
+        <div className="absolute top-full left-0 mt-2 w-[min(20rem,calc(100vw-2rem))] bg-base-100 shadow-2xl rounded-2xl border border-base-content/10 overflow-hidden z-50 p-2 transform origin-top-left transition-all">
           <div className="p-2">
             <input
               ref={inputRef}
