@@ -5,7 +5,7 @@ const API_BASE = '/api';
 
 const API_KEY = import.meta.env.VITE_API_KEY as string | undefined;
 
-function getHeaders(includeContentType = true): HeadersInit {
+function getHeaders(includeContentType = false): HeadersInit {
   const headers: Record<string, string> = {};
   if (includeContentType) headers['Content-Type'] = 'application/json';
   if (API_KEY) headers['Authorization'] = `Bearer ${API_KEY}`;
@@ -28,7 +28,7 @@ export const apiClient = {
   createBoard: async (data: { name: string; availabilitySchedule: unknown }) => {
     const res = await fetch(`${API_BASE}/boards`, {
       method: 'POST',
-      headers: getHeaders(),
+      headers: getHeaders(true),
       body: JSON.stringify(data),
     });
     return (await throwIfNotOk(res)).json();
@@ -36,7 +36,7 @@ export const apiClient = {
   updateBoard: async (boardId: string, data: Record<string, unknown>) => {
     const res = await fetch(`${API_BASE}/boards/${boardId}`, {
       method: 'PATCH',
-      headers: getHeaders(),
+      headers: getHeaders(true),
       body: JSON.stringify(data),
     });
     return (await throwIfNotOk(res)).json();
@@ -48,7 +48,7 @@ export const apiClient = {
   reorderBoards: async (boards: { id: string; order: number }[]) => {
     const res = await fetch(`${API_BASE}/boards/reorder`, {
       method: 'PUT',
-      headers: getHeaders(),
+      headers: getHeaders(true),
       body: JSON.stringify({ boards }),
     });
     return (await throwIfNotOk(res)).json();
@@ -68,7 +68,7 @@ export const apiClient = {
   updateCard: async (cardId: string, updates: Partial<CardType>) => {
     const res = await fetch(`${API_BASE}/cards/${cardId}`, {
       method: 'PATCH',
-      headers: getHeaders(),
+      headers: getHeaders(true),
       body: JSON.stringify(updates),
     });
     return (await throwIfNotOk(res)).json();
@@ -99,7 +99,7 @@ export const apiClient = {
   createCard: async (boardId: string, card: Partial<CardType>) => {
     const res = await fetch(`${API_BASE}/boards/${boardId}/cards`, {
       method: 'POST',
-      headers: getHeaders(),
+      headers: getHeaders(true),
       body: JSON.stringify(card),
     });
     return (await throwIfNotOk(res)).json();
@@ -123,7 +123,7 @@ export const apiClient = {
   autoSchedule: async (boardId: string) => {
     const res = await fetch(`${API_BASE}/scheduler/auto`, {
       method: 'POST',
-      headers: getHeaders(),
+      headers: getHeaders(true),
       body: JSON.stringify({ boardId }),
     });
     return (await throwIfNotOk(res)).json();
@@ -131,7 +131,7 @@ export const apiClient = {
   scheduleCard: async (cardId: string, data?: { scheduledAt?: string; durationMinutes?: number }): Promise<{ success: boolean; scheduledAt: string }> => {
     const res = await fetch(`${API_BASE}/cards/${cardId}/schedule`, {
       method: 'POST',
-      headers: getHeaders(),
+      headers: getHeaders(true),
       body: JSON.stringify(data || {}),
     });
     return (await throwIfNotOk(res)).json();
@@ -145,7 +145,7 @@ export const apiClient = {
   addDependency: async (blockingCardId: string, blockedCardId: string) => {
     const res = await fetch(`${API_BASE}/dependencies`, {
       method: 'POST',
-      headers: getHeaders(),
+      headers: getHeaders(true),
       body: JSON.stringify({ blockingCardId, blockedCardId }),
     });
     return (await throwIfNotOk(res)).json();
@@ -168,7 +168,7 @@ export const apiClient = {
   addCardUpdate: async (cardId: string, content: string) => {
     const res = await fetch(`${API_BASE}/cards/${cardId}/updates`, {
       method: 'POST',
-      headers: getHeaders(),
+      headers: getHeaders(true),
       body: JSON.stringify({ content }),
     });
     return (await throwIfNotOk(res)).json();
@@ -186,7 +186,7 @@ export const apiClient = {
   createTag: async (data: { name: string; boardId: string; colour?: string }) => {
     const res = await fetch(`${API_BASE}/tags`, {
       method: 'POST',
-      headers: getHeaders(),
+      headers: getHeaders(true),
       body: JSON.stringify(data),
     });
     return (await throwIfNotOk(res)).json();
@@ -194,7 +194,7 @@ export const apiClient = {
   addCardTag: async (cardId: string, tagId: string) => {
     const res = await fetch(`${API_BASE}/cards/${cardId}/tags`, {
       method: 'POST',
-      headers: getHeaders(),
+      headers: getHeaders(true),
       body: JSON.stringify({ tagId }),
     });
     return (await throwIfNotOk(res)).json();
