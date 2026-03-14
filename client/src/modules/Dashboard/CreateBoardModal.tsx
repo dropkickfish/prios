@@ -3,7 +3,7 @@ import { apiClient } from '../../api/client';
 
 interface CreateBoardModalProps {
   onClose: () => void;
-  onCreated: (board: any) => void;
+  onCreated: (board: Awaited<ReturnType<typeof apiClient.createBoard>>) => void;
 }
 
 export const CreateBoardModal: React.FC<CreateBoardModalProps> = ({ onClose, onCreated }) => {
@@ -29,8 +29,9 @@ export const CreateBoardModal: React.FC<CreateBoardModalProps> = ({ onClose, onC
       });
       onCreated(newBoard);
       onClose();
-    } catch (err: any) {
-      alert(err.message || 'Failed to create board');
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to create board';
+      alert(message);
     } finally {
       setLoading(false);
     }
@@ -46,7 +47,7 @@ export const CreateBoardModal: React.FC<CreateBoardModalProps> = ({ onClose, onC
             <input 
               type="text" 
               placeholder="e.g. Work, Personal, Side Projects" 
-              className="input w-full bg-base-content/5 border border-base-content/10 focus:border-primary/50 focus:bg-base-content/10 rounded-2xl h-12 text-base font-bold px-4 transition-all placeholder:text-base-content/30"
+              className="input w-full bg-base-content/5 border border-base-content/10 focus:border-primary/50 focus:bg-base-content/10 rounded-2xl h-12 text-base font-bold px-4 transition-all text-base-content caret-base-content placeholder:text-base-content/30"
               value={name}
               onChange={(e) => setName(e.target.value)}
               required
