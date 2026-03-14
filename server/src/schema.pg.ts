@@ -1,4 +1,4 @@
-import { pgTable, text, integer, boolean, timestamp, jsonb } from 'drizzle-orm/pg-core';
+import { pgTable, text, integer, boolean, timestamp, jsonb, unique } from 'drizzle-orm/pg-core';
 import { v4 as uuidv4 } from 'uuid';
 
 export const boards = pgTable('boards', {
@@ -83,6 +83,44 @@ export const appSettings = pgTable('app_settings', {
   googleCalendarId: text('google_calendar_id').default('primary'),
   apiKeyHash: text('api_key_hash'),
   apiKeyHint: text('api_key_hint'),
+});
+
+export const users = pgTable('users', {
+  id: text('id').primaryKey().$defaultFn(() => uuidv4()),
+  email: text('email').notNull().unique(),
+  name: text('name'),
+  avatarUrl: text('avatar_url'),
+  createdAt: integer('created_at').notNull().$defaultFn(() => Date.now()),
+});
+
+export const oauthAccounts = pgTable('oauth_accounts', {
+  id: text('id').primaryKey().$defaultFn(() => uuidv4()),
+  userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  provider: text('provider').notNull(),
+  providerId: text('provider_id').notNull(),
+  email: text('email'),
+  createdAt: integer('created_at').notNull().$defaultFn(() => Date.now()),
+}, (t) => [unique().on(t.provider, t.providerId)]);
+
+export const sessions = pgTable('sessions', {
+  id: text('id').primaryKey().$defaultFn(() => uuidv4()),
+  userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  refreshTokenHash: text('refresh_token_hash').notNull().unique(),
+  userAgent: text('user_agent'),
+  createdAt: integer('created_at').notNull().$defaultFn(() => Date.now()),
+  lastUsedAt: integer('last_used_at').notNull().$defaultFn(() => Date.now()),
+  expiresAt: integer('expires_at').notNull(),
+});
+
+export const apiKeys = pgTable('api_keys', {
+  id: text('id').primaryKey().$defaultFn(() => uuidv4()),
+  userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  name: text('name').notNull(),
+  hash: text('hash').notNull().unique(),
+  hint: text('hint').notNull(),
+  expiresAt: integer('expires_at'),
+  lastUsedAt: integer('last_used_at'),
+  createdAt: integer('created_at').notNull().$defaultFn(() => Date.now()),
 });
 
 export const attachments = pgTable('attachments', {

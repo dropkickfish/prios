@@ -1,4 +1,4 @@
-import { sqliteTable, text, integer, blob } from 'drizzle-orm/sqlite-core';
+import { sqliteTable, text, integer, blob, unique } from 'drizzle-orm/sqlite-core';
 import { v4 as uuidv4 } from 'uuid';
 
 export const boards = sqliteTable('boards', {
@@ -83,6 +83,44 @@ export const appSettings = sqliteTable('app_settings', {
   googleCalendarId: text('google_calendar_id').default('primary'),
   apiKeyHash: text('api_key_hash'), // SHA-256 hex — plaintext never stored
   apiKeyHint: text('api_key_hint'), // last 4 chars of the original key, for display only
+});
+
+export const users = sqliteTable('users', {
+  id: text('id').primaryKey().$defaultFn(() => uuidv4()),
+  email: text('email').notNull().unique(),
+  name: text('name'),
+  avatarUrl: text('avatar_url'),
+  createdAt: integer('created_at').notNull().$defaultFn(() => Date.now()),
+});
+
+export const oauthAccounts = sqliteTable('oauth_accounts', {
+  id: text('id').primaryKey().$defaultFn(() => uuidv4()),
+  userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  provider: text('provider').notNull(), // 'google' | 'github' | 'oidc'
+  providerId: text('provider_id').notNull(),
+  email: text('email'),
+  createdAt: integer('created_at').notNull().$defaultFn(() => Date.now()),
+}, (t) => [unique().on(t.provider, t.providerId)]);
+
+export const sessions = sqliteTable('sessions', {
+  id: text('id').primaryKey().$defaultFn(() => uuidv4()),
+  userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  refreshTokenHash: text('refresh_token_hash').notNull().unique(),
+  userAgent: text('user_agent'),
+  createdAt: integer('created_at').notNull().$defaultFn(() => Date.now()),
+  lastUsedAt: integer('last_used_at').notNull().$defaultFn(() => Date.now()),
+  expiresAt: integer('expires_at').notNull(),
+});
+
+export const apiKeys = sqliteTable('api_keys', {
+  id: text('id').primaryKey().$defaultFn(() => uuidv4()),
+  userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  name: text('name').notNull(),
+  hash: text('hash').notNull().unique(),
+  hint: text('hint').notNull(), // last 4 chars of plaintext key
+  expiresAt: integer('expires_at'), // null = never expires
+  lastUsedAt: integer('last_used_at'),
+  createdAt: integer('created_at').notNull().$defaultFn(() => Date.now()),
 });
 
 export const attachments = sqliteTable('attachments', {

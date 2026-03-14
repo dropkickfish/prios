@@ -5,6 +5,8 @@ import dotenv from 'dotenv';
 import cors from '@fastify/cors';
 import fastifyStatic from '@fastify/static';
 import fastifyMultipart from '@fastify/multipart';
+import fastifyCookie from '@fastify/cookie';
+import fastifyJwt from '@fastify/jwt';
 import swagger from '@fastify/swagger';
 import swaggerUi from '@fastify/swagger-ui';
 import authRoutes from './routes/auth.js';
@@ -18,7 +20,7 @@ import calendarRoutes from './routes/calendar.js';
 import attachmentsRoutes from './routes/attachments.js';
 import { createStorage } from './storage/index.js';
 import { sweepOrphanedFiles } from './storage/sweep.js';
-import apiKeyMiddleware from './middleware/apiKey.js';
+import authMiddleware from './middleware/auth.js';
 import apiKeyRoutes from './routes/apiKey.js';
 
 dotenv.config();
@@ -53,6 +55,11 @@ await fastify.register(fastifyMultipart, {
   limits: { fileSize: 10 * 1024 * 1024 }, // 10 MB
 });
 
+await fastify.register(fastifyCookie);
+await fastify.register(fastifyJwt, {
+  secret: process.env.AUTH_SECRET ?? 'dev-secret-change-in-production',
+});
+
 // Serve uploaded files when using local storage
 const useLocalStorage = process.env.STORAGE_TYPE !== 's3';
 if (useLocalStorage) {
@@ -66,7 +73,7 @@ if (useLocalStorage) {
 
 fastify.get('/health', async () => ({ status: 'ok' }));
 
-await fastify.register(apiKeyMiddleware);
+await fastify.register(authMiddleware);
 
 await fastify.register(authRoutes, { prefix: '/api' });
 await fastify.register(boardsRoutes, { prefix: '/api' });

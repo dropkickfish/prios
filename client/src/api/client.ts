@@ -1,4 +1,5 @@
 import type { CardType, TagType, AttachmentType } from '../types';
+import { onAuthFailure } from '../context/AuthContext';
 
 /** Use relative path so dev proxy and production same-origin both work. */
 const API_BASE = '/api';
@@ -12,7 +13,16 @@ function getHeaders(includeContentType = false): HeadersInit {
   return headers;
 }
 
+/** Wrapper that always sends cookies (session auth) and Bearer (PAT auth). */
+function apiFetch(url: string, init: RequestInit = {}): Promise<Response> {
+  return fetch(url, { ...init, credentials: 'include' });
+}
+
 async function throwIfNotOk(res: Response): Promise<Response> {
+  if (res.status === 401) {
+    onAuthFailure?.();
+    throw new Error('Unauthorised');
+  }
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
     throw new Error((err as { error?: string }).error || `HTTP ${res.status}`);
@@ -22,11 +32,11 @@ async function throwIfNotOk(res: Response): Promise<Response> {
 
 export const apiClient = {
   getBoards: async () => {
-    const res = await fetch(`${API_BASE}/boards`, { headers: getHeaders() });
+    const res = await apiFetch(`${API_BASE}/boards`, { headers: getHeaders() });
     return (await throwIfNotOk(res)).json();
   },
   createBoard: async (data: { name: string; availabilitySchedule: unknown }) => {
-    const res = await fetch(`${API_BASE}/boards`, {
+    const res = await apiFetch(`${API_BASE}/boards`, {
       method: 'POST',
       headers: getHeaders(true),
       body: JSON.stringify(data),
@@ -34,7 +44,7 @@ export const apiClient = {
     return (await throwIfNotOk(res)).json();
   },
   updateBoard: async (boardId: string, data: Record<string, unknown>) => {
-    const res = await fetch(`${API_BASE}/boards/${boardId}`, {
+    const res = await apiFetch(`${API_BASE}/boards/${boardId}`, {
       method: 'PATCH',
       headers: getHeaders(true),
       body: JSON.stringify(data),
@@ -42,11 +52,11 @@ export const apiClient = {
     return (await throwIfNotOk(res)).json();
   },
   deleteBoard: async (boardId: string) => {
-    const res = await fetch(`${API_BASE}/boards/${boardId}`, { method: 'DELETE', headers: getHeaders() });
+    const res = await apiFetch(`${API_BASE}/boards/${boardId}`, { method: 'DELETE', headers: getHeaders() });
     return (await throwIfNotOk(res)).json();
   },
   reorderBoards: async (boards: { id: string; order: number }[]) => {
-    const res = await fetch(`${API_BASE}/boards/reorder`, {
+    const res = await apiFetch(`${API_BASE}/boards/reorder`, {
       method: 'PUT',
       headers: getHeaders(true),
       body: JSON.stringify({ boards }),
@@ -54,19 +64,19 @@ export const apiClient = {
     return (await throwIfNotOk(res)).json();
   },
   getStatuses: async (boardId: string) => {
-    const res = await fetch(`${API_BASE}/boards/${boardId}/statuses`, { headers: getHeaders() });
+    const res = await apiFetch(`${API_BASE}/boards/${boardId}/statuses`, { headers: getHeaders() });
     return (await throwIfNotOk(res)).json();
   },
   getCards: async (boardId: string) => {
-    const res = await fetch(`${API_BASE}/boards/${boardId}/cards`, { headers: getHeaders() });
+    const res = await apiFetch(`${API_BASE}/boards/${boardId}/cards`, { headers: getHeaders() });
     return (await throwIfNotOk(res)).json();
   },
   getCard: async (cardId: string) => {
-    const res = await fetch(`${API_BASE}/cards/${cardId}`, { headers: getHeaders() });
+    const res = await apiFetch(`${API_BASE}/cards/${cardId}`, { headers: getHeaders() });
     return (await throwIfNotOk(res)).json();
   },
   updateCard: async (cardId: string, updates: Partial<CardType>) => {
-    const res = await fetch(`${API_BASE}/cards/${cardId}`, {
+    const res = await apiFetch(`${API_BASE}/cards/${cardId}`, {
       method: 'PATCH',
       headers: getHeaders(true),
       body: JSON.stringify(updates),
@@ -74,30 +84,30 @@ export const apiClient = {
     return (await throwIfNotOk(res)).json();
   },
   deleteCard: async (cardId: string) => {
-    const res = await fetch(`${API_BASE}/cards/${cardId}`, {
+    const res = await apiFetch(`${API_BASE}/cards/${cardId}`, {
       method: 'DELETE',
       headers: getHeaders(),
     });
     return (await throwIfNotOk(res)).json();
   },
   getStats: async () => {
-    const res = await fetch(`${API_BASE}/stats`, { headers: getHeaders() });
+    const res = await apiFetch(`${API_BASE}/stats`, { headers: getHeaders() });
     return (await throwIfNotOk(res)).json();
   },
   recordAbandon: async () => {
-    const res = await fetch(`${API_BASE}/stats/abandon`, { method: 'POST', headers: getHeaders() });
+    const res = await apiFetch(`${API_BASE}/stats/abandon`, { method: 'POST', headers: getHeaders() });
     return (await throwIfNotOk(res)).json();
   },
   resetStats: async () => {
-    const res = await fetch(`${API_BASE}/stats`, { method: 'DELETE', headers: getHeaders() });
+    const res = await apiFetch(`${API_BASE}/stats`, { method: 'DELETE', headers: getHeaders() });
     return (await throwIfNotOk(res)).json();
   },
   resetStatsForDate: async (date: string) => {
-    const res = await fetch(`${API_BASE}/stats/${date}`, { method: 'DELETE', headers: getHeaders() });
+    const res = await apiFetch(`${API_BASE}/stats/${date}`, { method: 'DELETE', headers: getHeaders() });
     return (await throwIfNotOk(res)).json();
   },
   createCard: async (boardId: string, card: Partial<CardType>) => {
-    const res = await fetch(`${API_BASE}/boards/${boardId}/cards`, {
+    const res = await apiFetch(`${API_BASE}/boards/${boardId}/cards`, {
       method: 'POST',
       headers: getHeaders(true),
       body: JSON.stringify(card),
@@ -105,23 +115,23 @@ export const apiClient = {
     return (await throwIfNotOk(res)).json();
   },
   getGoogleAuthUrl: async () => {
-    const res = await fetch(`${API_BASE}/auth/google/url`, { headers: getHeaders() });
+    const res = await apiFetch(`${API_BASE}/auth/google-calendar/url`, { headers: getHeaders() });
     return (await throwIfNotOk(res)).json();
   },
   getGoogleAuthStatus: async () => {
-    const res = await fetch(`${API_BASE}/auth/google/status`, { headers: getHeaders() });
+    const res = await apiFetch(`${API_BASE}/auth/google-calendar/status`, { headers: getHeaders() });
     return (await throwIfNotOk(res)).json();
   },
   disconnectGoogle: async () => {
-    const res = await fetch(`${API_BASE}/auth/google`, { method: 'DELETE', headers: getHeaders() });
+    const res = await apiFetch(`${API_BASE}/auth/google-calendar`, { method: 'DELETE', headers: getHeaders() });
     return (await throwIfNotOk(res)).json();
   },
   getCalendarAvailability: async () => {
-    const res = await fetch(`${API_BASE}/calendar/availability`, { headers: getHeaders() });
+    const res = await apiFetch(`${API_BASE}/calendar/availability`, { headers: getHeaders() });
     return (await throwIfNotOk(res)).json();
   },
   autoSchedule: async (boardId: string) => {
-    const res = await fetch(`${API_BASE}/scheduler/auto`, {
+    const res = await apiFetch(`${API_BASE}/scheduler/auto`, {
       method: 'POST',
       headers: getHeaders(true),
       body: JSON.stringify({ boardId }),
@@ -129,7 +139,7 @@ export const apiClient = {
     return (await throwIfNotOk(res)).json();
   },
   scheduleCard: async (cardId: string, data?: { scheduledAt?: string; durationMinutes?: number }): Promise<{ success: boolean; scheduledAt: string }> => {
-    const res = await fetch(`${API_BASE}/cards/${cardId}/schedule`, {
+    const res = await apiFetch(`${API_BASE}/cards/${cardId}/schedule`, {
       method: 'POST',
       headers: getHeaders(true),
       body: JSON.stringify(data || {}),
@@ -143,7 +153,7 @@ export const apiClient = {
     return (await throwIfNotOk(res)).json();
   },
   addDependency: async (blockingCardId: string, blockedCardId: string) => {
-    const res = await fetch(`${API_BASE}/dependencies`, {
+    const res = await apiFetch(`${API_BASE}/dependencies`, {
       method: 'POST',
       headers: getHeaders(true),
       body: JSON.stringify({ blockingCardId, blockedCardId }),
@@ -151,22 +161,22 @@ export const apiClient = {
     return (await throwIfNotOk(res)).json();
   },
   getCardDependencies: async (cardId: string) => {
-    const res = await fetch(`${API_BASE}/cards/${cardId}/dependencies`, { headers: getHeaders() });
+    const res = await apiFetch(`${API_BASE}/cards/${cardId}/dependencies`, { headers: getHeaders() });
     return (await throwIfNotOk(res)).json();
   },
   deleteDependency: async (dependencyId: string) => {
-    const res = await fetch(`${API_BASE}/dependencies/${dependencyId}`, {
+    const res = await apiFetch(`${API_BASE}/dependencies/${dependencyId}`, {
       method: 'DELETE',
       headers: getHeaders(),
     });
     return (await throwIfNotOk(res)).json();
   },
   getCardUpdates: async (cardId: string) => {
-    const res = await fetch(`${API_BASE}/cards/${cardId}/updates`, { headers: getHeaders() });
+    const res = await apiFetch(`${API_BASE}/cards/${cardId}/updates`, { headers: getHeaders() });
     return (await throwIfNotOk(res)).json();
   },
   addCardUpdate: async (cardId: string, content: string) => {
-    const res = await fetch(`${API_BASE}/cards/${cardId}/updates`, {
+    const res = await apiFetch(`${API_BASE}/cards/${cardId}/updates`, {
       method: 'POST',
       headers: getHeaders(true),
       body: JSON.stringify({ content }),
@@ -174,7 +184,7 @@ export const apiClient = {
     return (await throwIfNotOk(res)).json();
   },
   syncCalendar: async () => {
-    const res = await fetch(`${API_BASE}/calendar/sync`, { method: 'POST', headers: getHeaders() });
+    const res = await apiFetch(`${API_BASE}/calendar/sync`, { method: 'POST', headers: getHeaders() });
     return (await throwIfNotOk(res)).json();
   },
   getTags: async (boardId?: string): Promise<TagType[]> => {
@@ -184,7 +194,7 @@ export const apiClient = {
     return (await throwIfNotOk(res)).json();
   },
   createTag: async (data: { name: string; boardId: string; colour?: string }) => {
-    const res = await fetch(`${API_BASE}/tags`, {
+    const res = await apiFetch(`${API_BASE}/tags`, {
       method: 'POST',
       headers: getHeaders(true),
       body: JSON.stringify(data),
@@ -192,7 +202,7 @@ export const apiClient = {
     return (await throwIfNotOk(res)).json();
   },
   addCardTag: async (cardId: string, tagId: string) => {
-    const res = await fetch(`${API_BASE}/cards/${cardId}/tags`, {
+    const res = await apiFetch(`${API_BASE}/cards/${cardId}/tags`, {
       method: 'POST',
       headers: getHeaders(true),
       body: JSON.stringify({ tagId }),
@@ -200,20 +210,20 @@ export const apiClient = {
     return (await throwIfNotOk(res)).json();
   },
   deleteCardTag: async (cardId: string, tagId: string) => {
-    const res = await fetch(`${API_BASE}/cards/${cardId}/tags/${tagId}`, {
+    const res = await apiFetch(`${API_BASE}/cards/${cardId}/tags/${tagId}`, {
       method: 'DELETE',
       headers: getHeaders(),
     });
     return (await throwIfNotOk(res)).json();
   },
   getAttachments: async (cardId: string): Promise<AttachmentType[]> => {
-    const res = await fetch(`${API_BASE}/cards/${cardId}/attachments`, { headers: getHeaders() });
+    const res = await apiFetch(`${API_BASE}/cards/${cardId}/attachments`, { headers: getHeaders() });
     return (await throwIfNotOk(res)).json();
   },
   uploadAttachment: async (cardId: string, file: File): Promise<AttachmentType> => {
     const form = new FormData();
     form.append('file', file);
-    const res = await fetch(`${API_BASE}/cards/${cardId}/attachments`, {
+    const res = await apiFetch(`${API_BASE}/cards/${cardId}/attachments`, {
       method: 'POST',
       headers: getHeaders(false), // no Content-Type — browser sets multipart/form-data boundary
       body: form,
@@ -221,19 +231,29 @@ export const apiClient = {
     return (await throwIfNotOk(res)).json();
   },
   deleteAttachment: async (attachmentId: string): Promise<void> => {
-    const res = await fetch(`${API_BASE}/attachments/${attachmentId}`, { method: 'DELETE', headers: getHeaders() });
+    const res = await apiFetch(`${API_BASE}/attachments/${attachmentId}`, { method: 'DELETE', headers: getHeaders() });
     await throwIfNotOk(res);
   },
+  // Personal Access Tokens
+  listApiKeys: async () => {
+    const res = await apiFetch(`${API_BASE}/settings/api-keys`, { headers: getHeaders() });
+    return (await throwIfNotOk(res)).json();
+  },
+  createApiKey: async (data: { name: string; expiresAt?: number | null }): Promise<{ id: string; key: string; name: string; hint: string; expiresAt: number | null; createdAt: number }> => {
+    const res = await apiFetch(`${API_BASE}/settings/api-keys`, {
+      method: 'POST',
+      headers: getHeaders(true),
+      body: JSON.stringify(data),
+    });
+    return (await throwIfNotOk(res)).json();
+  },
+  deleteApiKey: async (id: string): Promise<{ success: boolean }> => {
+    const res = await apiFetch(`${API_BASE}/settings/api-keys/${id}`, { method: 'DELETE', headers: getHeaders() });
+    return (await throwIfNotOk(res)).json();
+  },
+  // Legacy compat
   getApiKeyStatus: async (): Promise<{ configured: boolean; preview: string | null; source: 'env' | 'db' | 'none' }> => {
-    const res = await fetch(`${API_BASE}/settings/api-key`, { headers: getHeaders() });
-    return (await throwIfNotOk(res)).json();
-  },
-  rotateApiKey: async (): Promise<{ key: string }> => {
-    const res = await fetch(`${API_BASE}/settings/api-key/rotate`, { method: 'POST', headers: getHeaders() });
-    return (await throwIfNotOk(res)).json();
-  },
-  deleteApiKey: async (): Promise<{ success: boolean }> => {
-    const res = await fetch(`${API_BASE}/settings/api-key`, { method: 'DELETE', headers: getHeaders() });
+    const res = await apiFetch(`${API_BASE}/settings/api-key`, { headers: getHeaders() });
     return (await throwIfNotOk(res)).json();
   },
 };

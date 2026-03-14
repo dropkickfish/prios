@@ -6,16 +6,22 @@ import { BoardView } from './modules/Dashboard/BoardView';
 import { Prioritise } from './modules/Prioritise/Prioritise';
 import { Stats } from './modules/Stats/Stats';
 import { Settings } from './modules/Settings/Settings';
-
+import { Login } from './pages/Login';
 import { KeyboardProvider, useShortcut } from './context/KeyboardContext';
+import { AuthProvider, useAuth, setAuthFailureHandler } from './context/AuthContext';
 
 function AppRoutes() {
   const navigate = useNavigate();
+  const { needsLogin, triggerLogin } = useAuth();
 
-  // Global navigation shortcuts
+  // Wire API client 401s to the auth context
+  setAuthFailureHandler(triggerLogin);
+
   useShortcut('settings', () => navigate('/settings'));
   useShortcut('dashboard', () => navigate('/'));
   useShortcut('stats', () => navigate('/stats'));
+
+  if (needsLogin) return <Login />;
 
   return (
     <Layout>
@@ -33,13 +39,14 @@ function AppRoutes() {
 
 function App() {
   return (
-    <KeyboardProvider>
-      <BrowserRouter>
-        <AppRoutes />
-      </BrowserRouter>
-    </KeyboardProvider>
+    <AuthProvider>
+      <KeyboardProvider>
+        <BrowserRouter>
+          <AppRoutes />
+        </BrowserRouter>
+      </KeyboardProvider>
+    </AuthProvider>
   );
 }
 
 export default App;
-
