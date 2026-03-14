@@ -25,9 +25,10 @@ RUN npm ci --omit=dev
 # Copy compiled server
 COPY --from=build-server /app/server/dist ./dist
 
-# Copy drizzle migration files
-COPY server/drizzle ./drizzle
+# Copy schema files and config needed by drizzle-kit push at runtime
 COPY server/drizzle.config.ts ./drizzle.config.ts
+COPY server/src/schema.ts ./src/schema.ts
+COPY server/src/schema.pg.ts ./src/schema.pg.ts
 
 # Copy built client
 COPY --from=build-client /app/client/dist /app/client/dist
