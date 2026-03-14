@@ -5,6 +5,7 @@ import { ThemeController } from '../../components/ThemeController';
 import { AccentController } from '../../components/AccentController';
 import { KeyboardSettings } from './KeyboardSettings';
 import { TriageSettings } from './TriageSettings';
+import { ApiKeySettings } from './ApiKeySettings';
 
 export const Settings = () => {
   const queryClient = useQueryClient();
@@ -101,6 +102,8 @@ export const Settings = () => {
       </section>
 
       <KeyboardSettings />
+
+      <ApiKeySettings />
 
       <TriageSettings />
 

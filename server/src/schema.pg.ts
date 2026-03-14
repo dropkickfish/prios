@@ -81,6 +81,8 @@ export const appSettings = pgTable('app_settings', {
   googleRefreshToken: text('google_refresh_token'),
   googleTokenExpiry: integer('google_token_expiry'),
   googleCalendarId: text('google_calendar_id').default('primary'),
+  apiKeyHash: text('api_key_hash'),
+  apiKeyHint: text('api_key_hint'),
 });
 
 export const attachments = pgTable('attachments', {

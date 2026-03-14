@@ -18,6 +18,8 @@ import calendarRoutes from './routes/calendar.js';
 import attachmentsRoutes from './routes/attachments.js';
 import { createStorage } from './storage/index.js';
 import { sweepOrphanedFiles } from './storage/sweep.js';
+import apiKeyMiddleware from './middleware/apiKey.js';
+import apiKeyRoutes from './routes/apiKey.js';
 
 dotenv.config();
 const PORT = Number(process.env.PORT) || 3000;
@@ -64,6 +66,8 @@ if (useLocalStorage) {
 
 fastify.get('/health', async () => ({ status: 'ok' }));
 
+await fastify.register(apiKeyMiddleware);
+
 await fastify.register(authRoutes, { prefix: '/api' });
 await fastify.register(boardsRoutes, { prefix: '/api' });
 await fastify.register(statusesRoutes, { prefix: '/api' });
@@ -73,6 +77,7 @@ await fastify.register(tagsRoutes, { prefix: '/api' });
 await fastify.register(dependenciesRoutes, { prefix: '/api' });
 await fastify.register(calendarRoutes, { prefix: '/api' });
 await fastify.register(attachmentsRoutes, { prefix: '/api', storage });
+await fastify.register(apiKeyRoutes, { prefix: '/api' });
 
 if (PUBLIC_DIR) {
   await fastify.register(fastifyStatic, {

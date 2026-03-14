@@ -81,6 +81,8 @@ export const appSettings = sqliteTable('app_settings', {
   googleRefreshToken: text('google_refresh_token'),
   googleTokenExpiry: integer('google_token_expiry'),
   googleCalendarId: text('google_calendar_id').default('primary'),
+  apiKeyHash: text('api_key_hash'), // SHA-256 hex — plaintext never stored
+  apiKeyHint: text('api_key_hint'), // last 4 chars of the original key, for display only
 });
 
 export const attachments = sqliteTable('attachments', {
