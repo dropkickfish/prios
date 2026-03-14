@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
@@ -92,6 +92,7 @@ export const BoardView = () => {
   const [showTriagePrompt, setShowTriagePrompt] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const { shortcuts } = useKeyboard();
+  const mountSyncBoardIdRef = useRef<string | null>(null);
 
   const { data: boards = [] } = useQuery<BoardType[]>({
     queryKey: queryKeys.boards(),
@@ -123,7 +124,7 @@ export const BoardView = () => {
     if (!boards.find(b => b.id === boardId)) {
       navigate('/');
     }
-  }, [boards, boardId]);
+  }, [boards, boardId, navigate]);
 
   useEffect(() => {
     if (errorMessage) {
@@ -132,25 +133,41 @@ export const BoardView = () => {
     }
   }, [errorMessage]);
 
-  // Non-blocking calendar sync on mount
+  const isCalendarSyncExpectedError = (err: unknown) => {
+    if (!(err instanceof Error)) return false;
+    const msg = err.message.toLowerCase();
+    return msg.includes('bad request') || msg.includes('not connected') || msg.includes('calendar');
+  };
+
+  const syncCalendarSafely = useCallback(async () => {
+    if (!boardId) return;
+    try {
+      const result = await apiClient.syncCalendar();
+      if (result.synced > 0 || result.moved > 0 || result.deleted > 0) {
+        queryClient.invalidateQueries({ queryKey: queryKeys.cards(boardId) });
+      }
+    } catch (err) {
+      // Common when calendar integration is not connected/configured yet.
+      if (!isCalendarSyncExpectedError(err)) {
+        console.warn('Calendar sync failed', err);
+      }
+    }
+  }, [boardId, queryClient]);
+
+  // Non-blocking calendar sync on mount (once per board load)
   useEffect(() => {
     if (!boardId) return;
-    apiClient.syncCalendar()
-      .then((result) => {
-        if (result.synced > 0 || result.moved > 0 || result.deleted > 0) {
-          console.log("Sync detected changes, refreshing...");
-          queryClient.invalidateQueries({ queryKey: queryKeys.cards(boardId) });
-        }
-      })
-      .catch(err => console.error("Sync failed", err));
-  }, [boardId]);
+    if (mountSyncBoardIdRef.current === boardId) return;
+    mountSyncBoardIdRef.current = boardId;
+    syncCalendarSafely();
+  }, [boardId, syncCalendarSafely]);
 
   const updateCardMutation = useMutation({
     mutationFn: ({ cardId, statusId }: { cardId: string; statusId: string }) =>
       apiClient.updateCard(cardId, { statusId }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.cards(boardId!) });
-      apiClient.syncCalendar().catch(err => console.error("Sync failed", err));
+      syncCalendarSafely();
     },
   });
 

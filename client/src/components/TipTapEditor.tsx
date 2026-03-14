@@ -10,9 +10,10 @@ interface TipTapEditorProps {
   content: string;
   onChange: (content: string) => void;
   placeholder?: string;
+  focusSignal?: number;
 }
 
-export const TipTapEditor = ({ content, onChange, placeholder }: TipTapEditorProps) => {
+export const TipTapEditor = ({ content, onChange, placeholder, focusSignal }: TipTapEditorProps) => {
   const editor = useEditor({
     extensions: [
       StarterKit,

@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '../../api/client';
 import { queryKeys } from '../../api/queryKeys';
@@ -7,18 +8,63 @@ import { KeyboardSettings } from './KeyboardSettings';
 import { TriageSettings } from './TriageSettings';
 import { ApiKeySettings } from './ApiKeySettings';
 
+const shouldShowKeyboardSettings = () => {
+  if (typeof window === 'undefined') return true;
+
+  const isStandalonePwa =
+    window.matchMedia('(display-mode: standalone)').matches ||
+    ((window.navigator as Navigator & { standalone?: boolean }).standalone ?? false);
+  const isSmallScreen = window.matchMedia('(max-width: 767px)').matches;
+  const isCoarsePointer = window.matchMedia('(pointer: coarse)').matches;
+
+  return !isStandalonePwa && !(isSmallScreen && isCoarsePointer);
+};
+
 export const Settings = () => {
   const queryClient = useQueryClient();
+  const [isPollingForConnect, setIsPollingForConnect] = useState(false);
+  const [showKeyboardSettings, setShowKeyboardSettings] = useState(shouldShowKeyboardSettings);
 
   const { data: authStatus, isLoading } = useQuery({
     queryKey: queryKeys.googleAuthStatus(),
     queryFn: apiClient.getGoogleAuthStatus,
     refetchInterval: (query) => {
-      return query.state.data?.connected ? false : 2000;
+      const connected = query.state.data?.connected ?? false;
+      if (connected) return false;
+      return isPollingForConnect ? 2000 : false;
     },
   });
 
   const connected = authStatus?.connected ?? false;
+
+  useEffect(() => {
+    if (connected && isPollingForConnect) {
+      setIsPollingForConnect(false);
+    }
+  }, [connected, isPollingForConnect]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const displayModeQuery = window.matchMedia('(display-mode: standalone)');
+    const screenSizeQuery = window.matchMedia('(max-width: 767px)');
+    const pointerQuery = window.matchMedia('(pointer: coarse)');
+
+    const updateVisibility = () => {
+      setShowKeyboardSettings(shouldShowKeyboardSettings());
+    };
+
+    updateVisibility();
+    displayModeQuery.addEventListener('change', updateVisibility);
+    screenSizeQuery.addEventListener('change', updateVisibility);
+    pointerQuery.addEventListener('change', updateVisibility);
+
+    return () => {
+      displayModeQuery.removeEventListener('change', updateVisibility);
+      screenSizeQuery.removeEventListener('change', updateVisibility);
+      pointerQuery.removeEventListener('change', updateVisibility);
+    };
+  }, []);
 
   const disconnectMutation = useMutation({
     mutationFn: apiClient.disconnectGoogle,
@@ -26,9 +72,16 @@ export const Settings = () => {
   });
 
   const handleConnect = async () => {
-    const { url } = await apiClient.getGoogleAuthUrl();
-    window.open(url, '_blank', 'width=600,height=600');
-    // Polling is handled automatically by refetchInterval above
+    try {
+      const { url } = await apiClient.getGoogleAuthUrl();
+      setIsPollingForConnect(true);
+      window.open(url, '_blank', 'width=600,height=600');
+      // Stop polling after 2 minutes if user closes the auth flow.
+      window.setTimeout(() => setIsPollingForConnect(false), 120000);
+    } catch (error) {
+      console.error('Failed to start Google auth flow:', error);
+      setIsPollingForConnect(false);
+    }
   };
 
   const handleDisconnect = async () => {
@@ -69,9 +122,18 @@ export const Settings = () => {
               </button>
             </div>
           ) : (
-            <button onClick={handleConnect} className="btn btn-primary rounded-lg border-none px-6">
-              Connect Calendar
-            </button>
+            <div className="flex flex-col items-end gap-2">
+              <button
+                onClick={handleConnect}
+                disabled={isPollingForConnect}
+                className="btn btn-primary rounded-lg border-none px-6 disabled:cursor-not-allowed disabled:opacity-70"
+              >
+                {isPollingForConnect ? 'Connecting...' : 'Connect Calendar'}
+              </button>
+              {isPollingForConnect && (
+                <p className="text-xs text-base-content/65">Waiting for Google sign-in confirmation...</p>
+              )}
+            </div>
           )}
         </div>
       </section>
@@ -101,7 +163,7 @@ export const Settings = () => {
         </div>
       </section>
 
-      <KeyboardSettings />
+      {showKeyboardSettings && <KeyboardSettings />}
 
       <ApiKeySettings />
 

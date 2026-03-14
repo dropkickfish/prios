@@ -33,6 +33,7 @@ export function QuickCaptureBar({
   const [complexity, setComplexity] = useState<1 | 2 | 3>(2);
   const [time, setTime] = useState<1 | 2>(1);
   const [description, setDescription] = useState('');
+  const [descriptionFocusSignal, setDescriptionFocusSignal] = useState(0);
   const [selectedImages, setSelectedImages] = useState<File[]>([]);
   const imageInputRef = useRef<HTMLInputElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -65,6 +66,16 @@ export function QuickCaptureBar({
     }
   };
 
+  const toggleDetails = () => {
+    setShowDetails((prev) => {
+      const next = !prev;
+      if (next) {
+        setDescriptionFocusSignal((signal) => signal + 1);
+      }
+      return next;
+    });
+  };
+
   return (
     <div className={className}>
       <form onSubmit={handleSubmit} className="space-y-2">
@@ -81,12 +92,13 @@ export function QuickCaptureBar({
                 </span>
               </div>
 
-              <div className="space-y-2">
+              <div className="space-y-2 [&_.ProseMirror]:min-h-[220px]">
                 <p className="text-[10px] uppercase tracking-[0.16em] font-bold text-base-content/55">Description</p>
                 <TipTapEditor
                   content={description}
                   onChange={setDescription}
                   placeholder="Add context, links, bullets, or checklist notes..."
+                  focusSignal={descriptionFocusSignal}
                 />
               </div>
 
@@ -188,7 +200,7 @@ export function QuickCaptureBar({
           />
           <button
             type="button"
-            onClick={() => setShowDetails(v => !v)}
+            onClick={toggleDetails}
             aria-expanded={showDetails}
             aria-controls={detailsId}
             className={`btn btn-ghost btn-sm shrink-0 border ${showDetails ? 'border-primary/40 text-primary' : 'border-base-content/20 text-base-content/70'}`}
