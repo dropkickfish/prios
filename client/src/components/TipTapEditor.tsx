@@ -52,7 +52,7 @@ export const TipTapEditor = ({ content, onChange, placeholder }: TipTapEditorPro
     const current = editor.getHTML();
     const next = content || '<p></p>';
     if (current !== next) {
-      editor.commands.setContent(next, false);
+      editor.commands.setContent(next);
     }
   }, [editor, content]);
 
