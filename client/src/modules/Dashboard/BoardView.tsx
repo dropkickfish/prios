@@ -89,6 +89,9 @@ export const BoardView = () => {
   const [focusConflict, setFocusConflict] = useState<{ cardToMove: CardType; currentDoing: CardType } | null>(null);
   const [showCommandBar, setShowCommandBar] = useState(false);
   const [showQuickAddBar, setShowQuickAddBar] = useState(false);
+  const [quickAddExpanded, setQuickAddExpanded] = useState(false);
+  const [quickAddSession, setQuickAddSession] = useState(0);
+  const [quickAddCollapseSignal, setQuickAddCollapseSignal] = useState(0);
   const [showTriagePrompt, setShowTriagePrompt] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const { shortcuts } = useKeyboard();
@@ -175,8 +178,25 @@ export const BoardView = () => {
     const firstMaybe = statuses.find(s => s.category === 'maybe');
     if (!firstMaybe || showCreateModal || viewerCard || schedulingCard) return;
     setSelectedStatusId(firstMaybe.id);
+    setQuickAddExpanded(false);
+    setQuickAddSession((session) => session + 1);
     setShowQuickAddBar(true);
   };
+
+  const closeQuickAdd = useCallback(() => {
+    const activeEl = document.activeElement as HTMLElement | null;
+    if (
+      activeEl &&
+      (activeEl.tagName === 'INPUT' ||
+        activeEl.tagName === 'TEXTAREA' ||
+        activeEl.isContentEditable)
+    ) {
+      activeEl.blur();
+    }
+    setShowQuickAddBar(false);
+    setQuickAddExpanded(false);
+    setSelectedStatusId(null);
+  }, [setShowQuickAddBar, setQuickAddExpanded, setSelectedStatusId]);
 
   // Shortcuts
   useShortcut('board_prioritise', () => navigate(`/boards/${boardId}/prioritise`));
@@ -198,9 +218,36 @@ export const BoardView = () => {
     const firstMaybe = statuses.find(s => s.category === 'maybe');
     if (firstMaybe && !showCreateModal && !viewerCard && !schedulingCard) {
       setSelectedStatusId(firstMaybe.id);
+      setQuickAddExpanded(false);
+      setQuickAddSession((session) => session + 1);
       setShowQuickAddBar(true);
     }
   });
+
+  useEffect(() => {
+    if (!showQuickAddBar) return;
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      e.preventDefault();
+      e.stopPropagation();
+      if (quickAddExpanded) {
+        setQuickAddExpanded(false);
+        setQuickAddCollapseSignal((signal) => signal + 1);
+        return;
+      }
+      closeQuickAdd();
+    };
+    window.addEventListener('keydown', handleEscape);
+    return () => window.removeEventListener('keydown', handleEscape);
+  }, [showQuickAddBar, quickAddExpanded, closeQuickAdd]);
+
+  useEffect(() => {
+    if (loading || showQuickAddBar || showCreateModal || showCommandBar || viewerCard || schedulingCard) return;
+    const activeEl = document.activeElement as HTMLElement | null;
+    if (activeEl && (activeEl.tagName === 'INPUT' || activeEl.tagName === 'TEXTAREA' || activeEl.isContentEditable)) {
+      activeEl.blur();
+    }
+  }, [loading, showQuickAddBar, showCreateModal, showCommandBar, viewerCard, schedulingCard]);
 
   const handleStatusChange = async (cardId: string, newStatusId: string) => {
     if (!boardId) return;
@@ -608,10 +655,7 @@ export const BoardView = () => {
               type="button"
               className="fixed inset-0 z-[59] bg-base-content/20"
               aria-label="Close quick add"
-              onClick={() => {
-                setShowQuickAddBar(false);
-                setSelectedStatusId(null);
-              }}
+              onClick={closeQuickAdd}
             />
           )}
           {/* Slide-up "What needs doing" panel — visible when + clicked or new_card shortcut */}
@@ -620,61 +664,70 @@ export const BoardView = () => {
               showQuickAddBar ? 'translate-y-0' : 'translate-y-full'
             }`}
           >
-            <div className="px-4 py-4 max-w-xl mx-auto">
+            <div
+              className={`mx-auto w-full px-4 py-4 transition-[height,max-height,padding,width] duration-300 ease-out ${
+                quickAddExpanded
+                  ? 'h-[100dvh] max-h-[100dvh] max-w-none pb-[calc(env(safe-area-inset-bottom)+1rem)] flex flex-col'
+                  : 'max-w-2xl max-h-[16rem] sm:max-h-[15rem]'
+              }`}
+            >
               <div className="flex items-center justify-between gap-2 mb-2">
                 <span className="text-xs font-bold uppercase tracking-widest opacity-60">What needs doing?</span>
                 <button
                   type="button"
-                  onClick={() => {
-                    setShowQuickAddBar(false);
-                    setSelectedStatusId(null);
-                  }}
+                  onClick={closeQuickAdd}
                   className="btn btn-ghost btn-circle btn-sm"
                   aria-label="Close"
                 >
                   <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
                 </button>
               </div>
-              <QuickCaptureBar
-                placeholder="What needs doing?"
-                backlogCount={cards.filter(c => statuses.find(s => s.id === c.statusId)?.category === 'maybe').length}
-                disabled={!!(viewerCard || schedulingCard)}
-                onSubmit={async ({ title, description, images, priority, difficulty }) => {
-                  const maybeStatus = statuses.find(s => s.category === 'maybe');
-                  if (!boardId || !maybeStatus) return;
-                  try {
-                    const newCard = await apiClient.createCard(boardId, {
-                      title,
-                      description: description?.trim() ? description : undefined,
-                      statusId: maybeStatus.id,
-                      difficulty: difficulty ?? 3,
-                      priority: priority ?? 3,
-                    });
+              <div id="quick-add-panel-body" className={`min-h-0 ${quickAddExpanded ? 'flex-1 overflow-y-auto pr-1' : 'overflow-visible'}`}>
+                <QuickCaptureBar
+                  key={quickAddSession}
+                  placeholder="What needs doing?"
+                  backlogCount={cards.filter(c => statuses.find(s => s.id === c.statusId)?.category === 'maybe').length}
+                  disabled={!!(viewerCard || schedulingCard)}
+                  focusOnOpen={showQuickAddBar}
+                  focusRequestId={quickAddSession}
+                  collapseDetailsSignal={quickAddCollapseSignal}
+                  onDetailsVisibilityChange={(isVisible) => setQuickAddExpanded(isVisible)}
+                  onSubmit={async ({ title, description, images, priority, difficulty }) => {
+                    const maybeStatus = statuses.find(s => s.category === 'maybe');
+                    if (!boardId || !maybeStatus) return;
+                    try {
+                      const newCard = await apiClient.createCard(boardId, {
+                        title,
+                        description: description?.trim() ? description : undefined,
+                        statusId: maybeStatus.id,
+                        difficulty: difficulty ?? 3,
+                        priority: priority ?? 3,
+                      });
 
-                    if (images && images.length > 0) {
-                      const uploaded = await Promise.all(
-                        images.map((file) => apiClient.uploadAttachment(newCard.id, file))
-                      );
-                      const imageHtml = uploaded
-                        .filter((attachment) => attachment.mimeType.startsWith('image/'))
-                        .map((attachment) => `<p><img src="${attachment.url}" alt="${attachment.filename}" /></p>`)
-                        .join('');
+                      if (images && images.length > 0) {
+                        const uploaded = await Promise.all(
+                          images.map((file) => apiClient.uploadAttachment(newCard.id, file))
+                        );
+                        const imageHtml = uploaded
+                          .filter((attachment) => attachment.mimeType.startsWith('image/'))
+                          .map((attachment) => `<p><img src="${attachment.url}" alt="${attachment.filename}" /></p>`)
+                          .join('');
 
-                      if (imageHtml) {
-                        const baseDescription = description?.trim() ? description : '<p></p>';
-                        await apiClient.updateCard(newCard.id, { description: `${baseDescription}${imageHtml}` });
+                        if (imageHtml) {
+                          const baseDescription = description?.trim() ? description : '<p></p>';
+                          await apiClient.updateCard(newCard.id, { description: `${baseDescription}${imageHtml}` });
+                        }
                       }
-                    }
 
-                    queryClient.invalidateQueries({ queryKey: queryKeys.cards(boardId) });
-                    setShowQuickAddBar(false);
-                    setSelectedStatusId(null);
-                  } catch (err: unknown) {
-                    setErrorMessage(err instanceof Error ? err.message : 'Failed to create task');
-                    throw err;
-                  }
-                }}
-              />
+                      queryClient.invalidateQueries({ queryKey: queryKeys.cards(boardId) });
+                      closeQuickAdd();
+                    } catch (err: unknown) {
+                      setErrorMessage(err instanceof Error ? err.message : 'Failed to create task');
+                      throw err;
+                    }
+                  }}
+                />
+              </div>
             </div>
           </div>
         </>

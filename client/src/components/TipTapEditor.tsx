@@ -57,6 +57,14 @@ export const TipTapEditor = ({ content, onChange, placeholder, focusSignal }: Ti
     }
   }, [editor, content]);
 
+  useEffect(() => {
+    if (!editor || focusSignal === undefined) return;
+    const raf = window.requestAnimationFrame(() => {
+      editor.commands.focus('end');
+    });
+    return () => window.cancelAnimationFrame(raf);
+  }, [editor, focusSignal]);
+
   if (!editor) {
     return null;
   }
