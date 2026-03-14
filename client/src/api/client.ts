@@ -1,4 +1,4 @@
-import type { CardType, TagType } from '../types';
+import type { CardType, TagType, AttachmentType } from '../types';
 
 /** Use relative path so dev proxy and production same-origin both work. */
 const API_BASE = '/api';
@@ -193,5 +193,22 @@ export const apiClient = {
       method: 'DELETE',
     });
     return (await throwIfNotOk(res)).json();
-  }
+  },
+  getAttachments: async (cardId: string): Promise<AttachmentType[]> => {
+    const res = await fetch(`${API_BASE}/cards/${cardId}/attachments`);
+    return (await throwIfNotOk(res)).json();
+  },
+  uploadAttachment: async (cardId: string, file: File): Promise<AttachmentType> => {
+    const form = new FormData();
+    form.append('file', file);
+    const res = await fetch(`${API_BASE}/cards/${cardId}/attachments`, {
+      method: 'POST',
+      body: form,
+    });
+    return (await throwIfNotOk(res)).json();
+  },
+  deleteAttachment: async (attachmentId: string): Promise<void> => {
+    const res = await fetch(`${API_BASE}/attachments/${attachmentId}`, { method: 'DELETE' });
+    await throwIfNotOk(res);
+  },
 };

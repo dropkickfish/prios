@@ -1,11 +1,18 @@
 import type { FastifyPluginAsync } from 'fastify';
 import { db, schema } from '../db.js';
 import { eq, and, or } from 'drizzle-orm';
+import type { StoragePort } from '../storage/port.js';
 import { isTimeAllowed } from '../lib/scheduling.js';
 import { getCalendarEvents, createCalendarEvent, deleteCalendarEvent } from '../lib/google.js';
 import { getOrCreateTodayStats } from '../lib/stats.js';
 
-const cardsRoutes: FastifyPluginAsync = async (fastify) => {
+interface CardsRouteOptions {
+  storage: StoragePort
+}
+
+const cardsRoutes: FastifyPluginAsync<CardsRouteOptions> = async (fastify, opts) => {
+  const { storage } = opts
+
   fastify.delete('/cards/:id', async (request, reply) => {
     const { id } = request.params as any;
     const cardRows = await db.select().from(schema.cards).where(eq(schema.cards.id, id));
@@ -25,8 +32,22 @@ const cardsRoutes: FastifyPluginAsync = async (fastify) => {
       }
     }
 
+    // Fetch attachment keys before CASCADE removes them
+    const cardAttachments = await db
+      .select({ key: schema.attachments.storageKey })
+      .from(schema.attachments)
+      .where(eq(schema.attachments.cardId, id))
+
     await db.delete(schema.cards).where(eq(schema.cards.id, id));
     await db.delete(schema.cardTags).where(eq(schema.cardTags.cardId, id));
+
+    // Best-effort file cleanup; orphan sweep catches any failures
+    if (cardAttachments.length) {
+      storage.deleteMany(cardAttachments.map(a => a.key)).catch(err =>
+        request.log.error({ err }, '[cleanup] File delete failed, orphan sweep will catch it')
+      )
+    }
+
     return { success: true };
   });
 

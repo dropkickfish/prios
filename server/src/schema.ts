@@ -82,3 +82,13 @@ export const appSettings = sqliteTable('app_settings', {
   googleTokenExpiry: integer('google_token_expiry'),
   googleCalendarId: text('google_calendar_id').default('primary'),
 });
+
+export const attachments = sqliteTable('attachments', {
+  id: text('id').primaryKey().$defaultFn(() => uuidv4()),
+  cardId: text('card_id').notNull().references(() => cards.id, { onDelete: 'cascade' }),
+  storageKey: text('storage_key').notNull(),  // e.g. "attachments/abc123.png"
+  filename: text('filename').notNull(),        // original filename for display
+  mimeType: text('mime_type').notNull(),
+  size: integer('size').notNull(),             // bytes
+  createdAt: integer('created_at').notNull().$defaultFn(() => Date.now()),
+});

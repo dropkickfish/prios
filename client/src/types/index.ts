@@ -43,3 +43,13 @@ export interface CardUpdateType {
   content: string;
   createdAt: Date;
 }
+
+export interface AttachmentType {
+  id: string;
+  cardId: string;
+  url: string;
+  filename: string;
+  mimeType: string;
+  size: number;
+  createdAt: number;
+}
