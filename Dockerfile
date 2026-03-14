@@ -2,7 +2,7 @@
 FROM node:22-alpine AS build-client
 WORKDIR /app/client
 COPY client/package*.json ./
-RUN npm ci
+RUN npm install
 COPY client/ ./
 RUN npm run build
 
@@ -11,7 +11,7 @@ FROM node:22-alpine AS build-server
 RUN apk add --no-cache python3 make g++
 WORKDIR /app/server
 COPY server/package*.json ./
-RUN npm ci
+RUN npm install
 COPY server/ ./
 RUN npm run build
 # Prune to prod-only deps (native modules already compiled)
