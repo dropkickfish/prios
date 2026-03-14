@@ -55,7 +55,7 @@ export function ScheduleTimeStrip({
 
   if (!scheduledStatusId) return null;
 
-  const [scheduledExpanded, setScheduledExpanded] = useState(true);
+  const [scheduledExpanded, setScheduledExpanded] = useState(false);
 
   const bucketLabel = (label: string, count: number) => (
     <span className="flex items-center gap-2">

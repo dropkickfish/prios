@@ -3,6 +3,7 @@ import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import Link from '@tiptap/extension-link';
 import Youtube from '@tiptap/extension-youtube';
+import Image from '@tiptap/extension-image';
 
 interface TipTapViewerProps {
   /** HTML string from TipTap (e.g. card description). */
@@ -26,6 +27,11 @@ export const TipTapViewer = ({ content, className = '' }: TipTapViewerProps) => 
         inline: false,
         width: 480,
         height: 270,
+      }),
+      Image.configure({
+        HTMLAttributes: {
+          class: 'rounded-xl max-w-full h-auto my-2 border border-base-content/10',
+        },
       }),
     ],
     content: content || '<p></p>',

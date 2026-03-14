@@ -83,7 +83,7 @@ export const BoardView = () => {
   // Store viewerCardId so the viewer stays in sync with the cached card data
   const [viewerCardId, setViewerCardId] = useState<string | null>(null);
   const [showSettingsModal, setShowSettingsModal] = useState(false);
-  const [collapsedCategories, setCollapsedCategories] = useState<string[]>(['done', 'wontdo']);
+  const [collapsedCategories, setCollapsedCategories] = useState<string[]>(['maybe', 'done', 'wontdo']);
   const [filterText, setFilterText] = useState('');
   const [showFilter, setShowFilter] = useState(false);
   const [focusConflict, setFocusConflict] = useState<{ cardToMove: CardType; currentDoing: CardType } | null>(null);
@@ -412,9 +412,6 @@ export const BoardView = () => {
               <span className={`w-2 h-2 rounded-full ${BOARD_STATUS_DOT_CLASS[board.colour || 'primary'] || 'bg-primary'}`}></span>
               {doingStatus && getCardsByStatus(doingStatus.id).length > 0 ? '1 task in focus' : 'Focus slot empty'}
             </div>
-            <div className="mt-2 text-xs text-base-content/65">
-              Queue tasks in Backlog, then run Prioritise to choose the next best task.
-            </div>
           </div>
           <div className={`flex shrink-0 items-center justify-end min-w-0 ml-auto ${showFilter || filterText ? 'w-full sm:w-auto' : ''}`}>
             {showFilter || filterText ? (
@@ -458,36 +455,13 @@ export const BoardView = () => {
       >
       <div className="flex-1 min-h-0 overflow-y-auto">
       <div className="space-y-4 px-4 py-4 sm:px-6 sm:py-5 pb-32 md:pb-12 min-h-0">
-        {/* Scheduled: expandable calendar at top (all breakpoints; desktop defaults expanded) */}
-        <ScheduleTimeStrip
-            cards={cards}
-            scheduledStatusId={scheduledStatus?.id ?? null}
-            filterText={filterText}
-            onCardClick={(card) => !(showCreateModal || viewerCard || schedulingCard) && setViewerCardId(card.id)}
-        />
-
         <div className="flex flex-col gap-4 min-h-[50vh] items-stretch">
-          {/* Backlog: expandable — order-2, always stacked */}
-          <BacklogSection
-            statuses={statuses}
-            getCardsByStatus={getCardsByStatus}
-            backlogCollapsed={backlogCollapsed}
-            toggleSection={toggleSection}
-            navigateToPrioritise={() => navigate(`/boards/${boardId}/prioritise`)}
-            modalOpen={!!(showCreateModal || viewerCard || schedulingCard)}
-            setSelectedStatusId={setSelectedStatusId}
-            setShowCreateModal={setShowCreateModal}
-            onCardClick={(card) => setViewerCardId(card.id)}
-            onStatusChange={(cardId, newStatusId) => handleStatusChange(cardId, newStatusId)}
-            onSchedule={handleSchedule}
-          />
-
           {/* FOCUS: always visible at top — order-1 */}
           {doingStatus && (
             <div className="order-1 flex-1 min-w-0 flex flex-col gap-3 px-2 w-full rounded-xl border border-base-content/15 bg-base-100 py-3">
               <div className="flex items-center gap-3 px-3">
                 <div className="w-1 h-8 rounded-full bg-base-content/40" />
-                <h2 className="text-sm font-bold uppercase tracking-[0.14em] text-base-content">Focus lane</h2>
+                <h2 className="text-sm font-bold uppercase tracking-[0.14em] text-base-content">Focus</h2>
                 <span className="badge badge-neutral badge-sm font-semibold" title="One task at a time - swap or finish current to add another">1 slot</span>
                 <span className="text-[11px] tracking-wide text-base-content/70 hidden sm:inline">Single-task mode</span>
               </div>
@@ -521,6 +495,30 @@ export const BoardView = () => {
               </div>
             </div>
           )}
+
+          {/* Scheduled: expandable calendar under focus */}
+          <ScheduleTimeStrip
+            className="order-2"
+            cards={cards}
+            scheduledStatusId={scheduledStatus?.id ?? null}
+            filterText={filterText}
+            onCardClick={(card) => !(showCreateModal || viewerCard || schedulingCard) && setViewerCardId(card.id)}
+          />
+
+          {/* Backlog: expandable — below scheduled */}
+          <BacklogSection
+            statuses={statuses}
+            getCardsByStatus={getCardsByStatus}
+            backlogCollapsed={backlogCollapsed}
+            toggleSection={toggleSection}
+            navigateToPrioritise={() => navigate(`/boards/${boardId}/prioritise`)}
+            modalOpen={!!(showCreateModal || viewerCard || schedulingCard)}
+            setSelectedStatusId={setSelectedStatusId}
+            setShowCreateModal={setShowCreateModal}
+            onCardClick={(card) => setViewerCardId(card.id)}
+            onStatusChange={(cardId, newStatusId) => handleStatusChange(cardId, newStatusId)}
+            onSchedule={handleSchedule}
+          />
 
           {/* Archive: expandable — order-3, always stacked */}
           <ArchiveSection
@@ -624,18 +622,40 @@ export const BoardView = () => {
                 placeholder="What needs doing?"
                 backlogCount={cards.filter(c => statuses.find(s => s.id === c.statusId)?.category === 'maybe').length}
                 disabled={!!(viewerCard || schedulingCard)}
-                onSubmit={async (title) => {
+                onSubmit={async ({ title, description, images, priority, difficulty }) => {
                   const maybeStatus = statuses.find(s => s.category === 'maybe');
                   if (!boardId || !maybeStatus) return;
-                  await apiClient.createCard(boardId, {
-                    title,
-                    statusId: maybeStatus.id,
-                    difficulty: 3,
-                    priority: 3,
-                  });
-                  queryClient.invalidateQueries({ queryKey: queryKeys.cards(boardId) });
-                  setShowQuickAddBar(false);
-                  setSelectedStatusId(null);
+                  try {
+                    const newCard = await apiClient.createCard(boardId, {
+                      title,
+                      description: description?.trim() ? description : undefined,
+                      statusId: maybeStatus.id,
+                      difficulty: difficulty ?? 3,
+                      priority: priority ?? 3,
+                    });
+
+                    if (images && images.length > 0) {
+                      const uploaded = await Promise.all(
+                        images.map((file) => apiClient.uploadAttachment(newCard.id, file))
+                      );
+                      const imageHtml = uploaded
+                        .filter((attachment) => attachment.mimeType.startsWith('image/'))
+                        .map((attachment) => `<p><img src="${attachment.url}" alt="${attachment.filename}" /></p>`)
+                        .join('');
+
+                      if (imageHtml) {
+                        const baseDescription = description?.trim() ? description : '<p></p>';
+                        await apiClient.updateCard(newCard.id, { description: `${baseDescription}${imageHtml}` });
+                      }
+                    }
+
+                    queryClient.invalidateQueries({ queryKey: queryKeys.cards(boardId) });
+                    setShowQuickAddBar(false);
+                    setSelectedStatusId(null);
+                  } catch (err: unknown) {
+                    setErrorMessage(err instanceof Error ? err.message : 'Failed to create task');
+                    throw err;
+                  }
                 }}
               />
             </div>

@@ -1,8 +1,10 @@
+import { useEffect } from 'react';
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import Placeholder from '@tiptap/extension-placeholder';
 import Link from '@tiptap/extension-link';
 import Youtube from '@tiptap/extension-youtube';
+import Image from '@tiptap/extension-image';
 
 interface TipTapEditorProps {
   content: string;
@@ -28,6 +30,11 @@ export const TipTapEditor = ({ content, onChange, placeholder }: TipTapEditorPro
         width: 480,
         height: 270,
       }),
+      Image.configure({
+        HTMLAttributes: {
+          class: 'rounded-xl max-w-full h-auto my-2 border border-base-content/10',
+        },
+      }),
     ],
     content,
     onUpdate: ({ editor }) => {
@@ -39,6 +46,15 @@ export const TipTapEditor = ({ content, onChange, placeholder }: TipTapEditorPro
       },
     },
   });
+
+  useEffect(() => {
+    if (!editor) return;
+    const current = editor.getHTML();
+    const next = content || '<p></p>';
+    if (current !== next) {
+      editor.commands.setContent(next, false);
+    }
+  }, [editor, content]);
 
   if (!editor) {
     return null;
@@ -155,11 +171,11 @@ export const TipTapEditor = ({ content, onChange, placeholder }: TipTapEditorPro
         <button
           type="button"
           onClick={() => {
-            // Placeholder for media upload
-            alert('Media upload functionality coming soon (Self-hosting priority)');
+            const url = window.prompt('Image URL');
+            if (url) editor.chain().focus().setImage({ src: url }).run();
           }}
           className="btn btn-xs btn-ghost"
-          title="Upload Media (Local Storage)"
+          title="Insert image by URL"
         >
           🖼️
         </button>
