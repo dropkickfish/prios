@@ -1,9 +1,34 @@
 import type { FastifyPluginAsync } from 'fastify';
 import { db, schema } from '../db.js';
 import { eq, and } from 'drizzle-orm';
+import { cardIdParam, successResponse } from '../schemas/common.js';
+
+const tagResponse = {
+  type: 'object',
+  properties: {
+    id: { type: 'string' },
+    boardId: { type: 'string' },
+    name: { type: 'string' },
+    colour: { type: 'string', nullable: true },
+  },
+};
 
 const tagsRoutes: FastifyPluginAsync = async (fastify) => {
-  fastify.get('/tags', async (request) => {
+  fastify.get('/tags', {
+    schema: {
+      tags: ['tags'],
+      summary: 'List tags, optionally filtered by board',
+      querystring: {
+        type: 'object',
+        properties: {
+          boardId: { type: 'string' },
+        },
+      },
+      response: {
+        200: { type: 'array', items: tagResponse },
+      },
+    },
+  }, async (request) => {
     const { boardId } = request.query as any;
     if (boardId) {
       return await db.select().from(schema.tags).where(eq(schema.tags.boardId, boardId));
@@ -11,7 +36,24 @@ const tagsRoutes: FastifyPluginAsync = async (fastify) => {
     return await db.select().from(schema.tags);
   });
 
-  fastify.post('/tags', async (request) => {
+  fastify.post('/tags', {
+    schema: {
+      tags: ['tags'],
+      summary: 'Create or return an existing tag for a board',
+      body: {
+        type: 'object',
+        properties: {
+          name: { type: 'string' },
+          colour: { type: 'string' },
+          boardId: { type: 'string' },
+        },
+        required: ['name', 'boardId'],
+      },
+      response: {
+        200: tagResponse,
+      },
+    },
+  }, async (request) => {
     const { name, colour, boardId } = request.body as any;
     if (!boardId) throw new Error('boardId is required');
 
@@ -32,7 +74,16 @@ const tagsRoutes: FastifyPluginAsync = async (fastify) => {
     return result[0];
   });
 
-  fastify.get('/cards/:cardId/tags', async (request) => {
+  fastify.get('/cards/:cardId/tags', {
+    schema: {
+      tags: ['tags'],
+      summary: 'List tags on a card',
+      params: cardIdParam,
+      response: {
+        200: { type: 'array', items: { type: 'object', properties: { tag: tagResponse } } },
+      },
+    },
+  }, async (request) => {
     const { cardId } = request.params as any;
     return await db.select({
       tag: schema.tags
@@ -42,7 +93,30 @@ const tagsRoutes: FastifyPluginAsync = async (fastify) => {
     .where(eq(schema.cardTags.cardId, cardId));
   });
 
-  fastify.post('/cards/:cardId/tags', async (request) => {
+  fastify.post('/cards/:cardId/tags', {
+    schema: {
+      tags: ['tags'],
+      summary: 'Add a tag to a card',
+      params: cardIdParam,
+      body: {
+        type: 'object',
+        properties: {
+          tagId: { type: 'string' },
+        },
+        required: ['tagId'],
+      },
+      response: {
+        200: {
+          type: 'object',
+          properties: {
+            id: { type: 'string' },
+            cardId: { type: 'string' },
+            tagId: { type: 'string' },
+          },
+        },
+      },
+    },
+  }, async (request) => {
     const { cardId } = request.params as any;
     const { tagId } = request.body as any;
 
@@ -57,7 +131,23 @@ const tagsRoutes: FastifyPluginAsync = async (fastify) => {
     return result[0];
   });
 
-  fastify.delete('/cards/:cardId/tags/:tagId', async (request) => {
+  fastify.delete('/cards/:cardId/tags/:tagId', {
+    schema: {
+      tags: ['tags'],
+      summary: 'Remove a tag from a card',
+      params: {
+        type: 'object',
+        properties: {
+          cardId: { type: 'string' },
+          tagId: { type: 'string' },
+        },
+        required: ['cardId', 'tagId'],
+      },
+      response: {
+        200: successResponse,
+      },
+    },
+  }, async (request) => {
     const { cardId, tagId } = request.params as any;
     await db.delete(schema.cardTags).where(
       and(eq(schema.cardTags.cardId, cardId), eq(schema.cardTags.tagId, tagId))

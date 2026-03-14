@@ -5,23 +5,49 @@ import { db, schema } from '../db.js'
 import type { StoragePort } from '../storage/port.js'
 import { sweepOrphanedFiles } from '../storage/sweep.js'
 import { v4 as uuidv4 } from 'uuid'
+import { idParam, cardIdParam } from '../schemas/common.js'
 
 interface AttachmentsRouteOptions {
   storage: StoragePort
 }
 
+const attachmentResponse = {
+  type: 'object',
+  properties: {
+    id: { type: 'string' },
+    cardId: { type: 'string' },
+    storageKey: { type: 'string' },
+    filename: { type: 'string' },
+    mimeType: { type: 'string' },
+    size: { type: 'integer' },
+    createdAt: { type: 'integer' },
+    url: { type: 'string' },
+  },
+};
+
 const attachmentsRoutes: FastifyPluginAsync<AttachmentsRouteOptions> = async (fastify, opts) => {
   const { storage } = opts
 
   // POST /api/cards/:cardId/attachments
-  fastify.post('/cards/:cardId/attachments', async (request, reply) => {
+  fastify.post('/cards/:cardId/attachments', {
+    schema: {
+      tags: ['attachments'],
+      summary: 'Upload a file attachment to a card',
+      params: cardIdParam,
+      consumes: ['multipart/form-data'],
+      response: {
+        201: attachmentResponse,
+        404: { type: 'object', properties: { error: { type: 'string' } } },
+      },
+    },
+  }, async (request, reply) => {
     const { cardId } = request.params as { cardId: string }
 
     const cardRows = await db.select().from(schema.cards).where(eq(schema.cards.id, cardId))
     if (!cardRows[0]) return reply.status(404).send({ error: 'Card not found' })
 
     const data = await (request as any).file()
-    if (!data) return reply.status(400).send({ error: 'No file uploaded' })
+    if (!data) return reply.status(400 as any).send({ error: 'No file uploaded' })
 
     const buffer: Buffer = await data.toBuffer()
     const ext = path.extname(data.filename)
@@ -42,7 +68,17 @@ const attachmentsRoutes: FastifyPluginAsync<AttachmentsRouteOptions> = async (fa
   })
 
   // GET /api/cards/:cardId/attachments
-  fastify.get('/cards/:cardId/attachments', async (request, reply) => {
+  fastify.get('/cards/:cardId/attachments', {
+    schema: {
+      tags: ['attachments'],
+      summary: 'List attachments for a card',
+      params: cardIdParam,
+      response: {
+        200: { type: 'array', items: attachmentResponse },
+        404: { type: 'object', properties: { error: { type: 'string' } } },
+      },
+    },
+  }, async (request, reply) => {
     const { cardId } = request.params as { cardId: string }
 
     const cardRows = await db.select().from(schema.cards).where(eq(schema.cards.id, cardId))
@@ -53,7 +89,17 @@ const attachmentsRoutes: FastifyPluginAsync<AttachmentsRouteOptions> = async (fa
   })
 
   // DELETE /api/attachments/:id
-  fastify.delete('/attachments/:id', async (request, reply) => {
+  fastify.delete('/attachments/:id', {
+    schema: {
+      tags: ['attachments'],
+      summary: 'Delete an attachment',
+      params: idParam,
+      response: {
+        204: { type: 'null' },
+        404: { type: 'object', properties: { error: { type: 'string' } } },
+      },
+    },
+  }, async (request, reply) => {
     const { id } = request.params as { id: string }
 
     const rows = await db.select().from(schema.attachments).where(eq(schema.attachments.id, id))
@@ -70,7 +116,21 @@ const attachmentsRoutes: FastifyPluginAsync<AttachmentsRouteOptions> = async (fa
   })
 
   // POST /api/admin/sweep — manual orphan sweep trigger
-  fastify.post('/admin/sweep', async () => {
+  fastify.post('/admin/sweep', {
+    schema: {
+      tags: ['attachments'],
+      summary: 'Trigger a manual orphaned-file sweep',
+      response: {
+        200: {
+          type: 'object',
+          properties: {
+            deleted: { type: 'integer' },
+            errors: { type: 'integer' },
+          },
+        },
+      },
+    },
+  }, async () => {
     return sweepOrphanedFiles(storage)
   })
 }

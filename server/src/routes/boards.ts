@@ -1,9 +1,19 @@
 import type { FastifyPluginAsync } from 'fastify';
 import { db, schema } from '../db.js';
 import { eq, or, inArray, sql } from 'drizzle-orm';
+import { idParam, successResponse } from '../schemas/common.js';
+import { boardResponse, boardBody, boardPatch } from '../schemas/boards.js';
 
 const boardsRoutes: FastifyPluginAsync = async (fastify) => {
-  fastify.get('/boards', async () => {
+  fastify.get('/boards', {
+    schema: {
+      tags: ['boards'],
+      summary: 'List all boards',
+      response: {
+        200: { type: 'array', items: boardResponse },
+      },
+    },
+  }, async () => {
     const boards = await db.select().from(schema.boards).orderBy(schema.boards.order);
     if (boards.length === 0) return boards;
 
@@ -26,7 +36,16 @@ const boardsRoutes: FastifyPluginAsync = async (fastify) => {
     }));
   });
 
-  fastify.post('/boards', async (request) => {
+  fastify.post('/boards', {
+    schema: {
+      tags: ['boards'],
+      summary: 'Create a board',
+      body: boardBody,
+      response: {
+        200: boardResponse,
+      },
+    },
+  }, async (request) => {
     const { name, availabilitySchedule, colour } = request.body as any;
 
     // Get max order
@@ -58,14 +77,49 @@ const boardsRoutes: FastifyPluginAsync = async (fastify) => {
     return board;
   });
 
-  fastify.patch('/boards/:id', async (request, reply) => {
+  fastify.patch('/boards/:id', {
+    schema: {
+      tags: ['boards'],
+      summary: 'Update a board',
+      params: idParam,
+      body: boardPatch,
+      response: {
+        200: boardResponse,
+      },
+    },
+  }, async (request, reply) => {
     const { id } = request.params as any;
     const updates = request.body as any;
     const result = await db.update(schema.boards).set(updates).where(eq(schema.boards.id, id)).returning();
     return result[0];
   });
 
-  fastify.put('/boards/reorder', async (request) => {
+  fastify.put('/boards/reorder', {
+    schema: {
+      tags: ['boards'],
+      summary: 'Reorder boards',
+      body: {
+        type: 'object',
+        properties: {
+          boards: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                id: { type: 'string' },
+                order: { type: 'integer' },
+              },
+              required: ['id', 'order'],
+            },
+          },
+        },
+        required: ['boards'],
+      },
+      response: {
+        200: successResponse,
+      },
+    },
+  }, async (request) => {
     const { boards } = request.body as any; // Array of { id, order }
 
     // Transaction would be better but simple loop works for SQLite
@@ -80,7 +134,16 @@ const boardsRoutes: FastifyPluginAsync = async (fastify) => {
     return { success: true };
   });
 
-  fastify.delete('/boards/:id', async (request) => {
+  fastify.delete('/boards/:id', {
+    schema: {
+      tags: ['boards'],
+      summary: 'Delete a board',
+      params: idParam,
+      response: {
+        200: successResponse,
+      },
+    },
+  }, async (request) => {
     const { id } = request.params as any;
 
     // 1. Get all card IDs for this board to clean up relations

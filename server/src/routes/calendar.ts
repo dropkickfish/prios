@@ -3,9 +3,33 @@ import { db, schema } from '../db.js';
 import { eq, and, or, isNotNull } from 'drizzle-orm';
 import { getCalendarEvents, createCalendarEvent, deleteCalendarEvent } from '../lib/google.js';
 import { isTimeAllowed } from '../lib/scheduling.js';
+import { successResponse } from '../schemas/common.js';
 
 const calendarRoutes: FastifyPluginAsync = async (fastify) => {
-  fastify.get('/calendar/availability', async (request) => {
+  fastify.get('/calendar/availability', {
+    schema: {
+      tags: ['calendar'],
+      summary: 'Get busy slots from Google Calendar for today',
+      response: {
+        200: {
+          type: 'object',
+          properties: {
+            busySlots: {
+              type: 'array',
+              items: {
+                type: 'object',
+                properties: {
+                  start: { type: 'string' },
+                  end: { type: 'string' },
+                  title: { type: 'string', nullable: true },
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+  }, async (request) => {
     const todayStart = new Date();
     todayStart.setHours(0,0,0,0);
     const todayEnd = new Date();
@@ -24,7 +48,38 @@ const calendarRoutes: FastifyPluginAsync = async (fastify) => {
   });
 
   // Scheduling Engine
-  fastify.post('/scheduler/auto', async (request) => {
+  fastify.post('/scheduler/auto', {
+    schema: {
+      tags: ['calendar'],
+      summary: 'Auto-schedule backlog cards for a board',
+      body: {
+        type: 'object',
+        properties: {
+          boardId: { type: 'string' },
+        },
+        required: ['boardId'],
+      },
+      response: {
+        200: {
+          type: 'object',
+          properties: {
+            success: { type: 'boolean' },
+            scheduledTasks: {
+              type: 'array',
+              items: {
+                type: 'object',
+                properties: {
+                  id: { type: 'string' },
+                  title: { type: 'string' },
+                  scheduledAt: { type: 'string', format: 'date-time' },
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+  }, async (request) => {
     const { boardId } = request.body as any;
 
     // 1. Get cards that need scheduling (e.g., in 'maybe' category)
@@ -126,7 +181,22 @@ const calendarRoutes: FastifyPluginAsync = async (fastify) => {
   });
 
   // Calendar Sync
-  fastify.post('/calendar/sync', async (request) => {
+  fastify.post('/calendar/sync', {
+    schema: {
+      tags: ['calendar'],
+      summary: 'Sync scheduled cards with Google Calendar',
+      response: {
+        200: {
+          type: 'object',
+          properties: {
+            synced: { type: 'integer' },
+            moved: { type: 'integer' },
+            deleted: { type: 'integer' },
+          },
+        },
+      },
+    },
+  }, async (request) => {
     // 1. Get all cards that are scheduled and have an externalEventId
     const scheduledCards = await db.select()
       .from(schema.cards)

@@ -1,9 +1,30 @@
 import type { FastifyPluginAsync } from 'fastify';
 import { db, schema } from '../db.js';
 import { eq } from 'drizzle-orm';
+import { boardIdParam, statusCategoryEnum } from '../schemas/common.js';
+
+const statusResponse = {
+  type: 'object',
+  properties: {
+    id: { type: 'string' },
+    boardId: { type: 'string' },
+    name: { type: 'string' },
+    order: { type: 'integer' },
+    category: { type: 'string', enum: statusCategoryEnum },
+  },
+};
 
 const statusesRoutes: FastifyPluginAsync = async (fastify) => {
-  fastify.get('/boards/:boardId/statuses', async (request) => {
+  fastify.get('/boards/:boardId/statuses', {
+    schema: {
+      tags: ['statuses'],
+      summary: 'List statuses for a board',
+      params: boardIdParam,
+      response: {
+        200: { type: 'array', items: statusResponse },
+      },
+    },
+  }, async (request) => {
     const { boardId } = request.params as any;
     let boardStatuses = await db.select().from(schema.statuses).where(eq(schema.statuses.boardId, boardId)).orderBy(schema.statuses.order);
 
@@ -22,7 +43,25 @@ const statusesRoutes: FastifyPluginAsync = async (fastify) => {
     return boardStatuses;
   });
 
-  fastify.post('/boards/:boardId/statuses', async (request) => {
+  fastify.post('/boards/:boardId/statuses', {
+    schema: {
+      tags: ['statuses'],
+      summary: 'Create a status lane for a board',
+      params: boardIdParam,
+      body: {
+        type: 'object',
+        properties: {
+          name: { type: 'string' },
+          order: { type: 'integer' },
+          category: { type: 'string', enum: statusCategoryEnum },
+        },
+        required: ['name', 'order', 'category'],
+      },
+      response: {
+        200: statusResponse,
+      },
+    },
+  }, async (request) => {
     const { boardId } = request.params as any;
     const { name, order, category } = request.body as any;
     const result = await db.insert(schema.statuses).values({

@@ -5,6 +5,8 @@ import dotenv from 'dotenv';
 import cors from '@fastify/cors';
 import fastifyStatic from '@fastify/static';
 import fastifyMultipart from '@fastify/multipart';
+import swagger from '@fastify/swagger';
+import swaggerUi from '@fastify/swagger-ui';
 import authRoutes from './routes/auth.js';
 import boardsRoutes from './routes/boards.js';
 import statusesRoutes from './routes/statuses.js';
@@ -23,6 +25,22 @@ const PUBLIC_DIR = process.env.PUBLIC_DIR ? path.resolve(process.env.PUBLIC_DIR)
 const storage = createStorage();
 
 const fastify = Fastify({ logger: true });
+
+await fastify.register(swagger, {
+  openapi: {
+    openapi: '3.0.0',
+    info: {
+      title: 'Prios API',
+      description: 'Task management API for Prios focus engine',
+      version: '1.0.0',
+    },
+  },
+});
+
+await fastify.register(swaggerUi, {
+  routePrefix: '/docs',
+  uiConfig: { docExpansion: 'list' },
+});
 
 await fastify.register(cors, {
   origin: true,

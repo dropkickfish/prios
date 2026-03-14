@@ -5,6 +5,8 @@ import type { StoragePort } from '../storage/port.js';
 import { isTimeAllowed } from '../lib/scheduling.js';
 import { getCalendarEvents, createCalendarEvent, deleteCalendarEvent } from '../lib/google.js';
 import { getOrCreateTodayStats } from '../lib/stats.js';
+import { idParam, boardIdParam, successResponse, errorResponse } from '../schemas/common.js';
+import { cardResponse, cardBody, cardPatch } from '../schemas/cards.js';
 
 interface CardsRouteOptions {
   storage: StoragePort
@@ -13,7 +15,17 @@ interface CardsRouteOptions {
 const cardsRoutes: FastifyPluginAsync<CardsRouteOptions> = async (fastify, opts) => {
   const { storage } = opts
 
-  fastify.delete('/cards/:id', async (request, reply) => {
+  fastify.delete('/cards/:id', {
+    schema: {
+      tags: ['cards'],
+      summary: 'Delete a card',
+      params: idParam,
+      response: {
+        200: successResponse,
+        404: errorResponse,
+      },
+    },
+  }, async (request, reply) => {
     const { id } = request.params as any;
     const cardRows = await db.select().from(schema.cards).where(eq(schema.cards.id, id));
     if (cardRows.length === 0) return reply.status(404).send({ error: 'Card not found' });
@@ -51,7 +63,16 @@ const cardsRoutes: FastifyPluginAsync<CardsRouteOptions> = async (fastify, opts)
     return { success: true };
   });
 
-  fastify.get('/boards/:boardId/cards', async (request) => {
+  fastify.get('/boards/:boardId/cards', {
+    schema: {
+      tags: ['cards'],
+      summary: 'List cards for a board',
+      params: boardIdParam,
+      response: {
+        200: { type: 'array', items: cardResponse },
+      },
+    },
+  }, async (request) => {
     const { boardId } = request.params as any;
     const boardStatuses = await db.select().from(schema.statuses).where(eq(schema.statuses.boardId, boardId));
     const statusById = new Map(boardStatuses.map(s => [s.id, s]));
@@ -85,7 +106,17 @@ const cardsRoutes: FastifyPluginAsync<CardsRouteOptions> = async (fastify, opts)
     });
   });
 
-  fastify.post('/boards/:boardId/cards', async (request) => {
+  fastify.post('/boards/:boardId/cards', {
+    schema: {
+      tags: ['cards'],
+      summary: 'Create a card on a board',
+      params: boardIdParam,
+      body: cardBody,
+      response: {
+        200: cardResponse,
+      },
+    },
+  }, async (request) => {
     const { boardId } = request.params as any;
     const { statusId, title, description, difficulty, priority } = request.body as any;
 
@@ -115,21 +146,49 @@ const cardsRoutes: FastifyPluginAsync<CardsRouteOptions> = async (fastify, opts)
     return result[0];
   });
 
-  fastify.post('/cards', async (request, reply) => {
+  fastify.post('/cards', {
+    schema: {
+      tags: ['cards'],
+      summary: 'Get a card by ID (legacy endpoint)',
+      hide: true,
+    },
+  }, async (request, reply) => {
     const { id } = request.params as any;
     const card = await db.select().from(schema.cards).where(eq(schema.cards.id, id));
     if (!card[0]) return reply.status(404).send({ error: 'Card not found' });
     return card[0];
   });
 
-  fastify.get('/cards/:id', async (request, reply) => {
+  fastify.get('/cards/:id', {
+    schema: {
+      tags: ['cards'],
+      summary: 'Get a card by ID',
+      params: idParam,
+      response: {
+        200: cardResponse,
+        404: errorResponse,
+      },
+    },
+  }, async (request, reply) => {
     const { id } = request.params as any;
     const card = await db.select().from(schema.cards).where(eq(schema.cards.id, id));
     if (!card[0]) return reply.status(404).send({ error: 'Card not found' });
     return card[0];
   });
 
-  fastify.patch('/cards/:id', async (request, reply) => {
+  fastify.patch('/cards/:id', {
+    schema: {
+      tags: ['cards'],
+      summary: 'Update a card',
+      params: idParam,
+      body: cardPatch,
+      response: {
+        200: cardResponse,
+        400: errorResponse,
+        404: errorResponse,
+      },
+    },
+  }, async (request, reply) => {
     const { id } = request.params as any;
     const updates = request.body as any;
 
@@ -203,7 +262,39 @@ const cardsRoutes: FastifyPluginAsync<CardsRouteOptions> = async (fastify, opts)
     return result[0];
   });
 
-  fastify.get('/cards/:id/schedule-suggestions', async (request, reply) => {
+  fastify.get('/cards/:id/schedule-suggestions', {
+    schema: {
+      tags: ['cards'],
+      summary: 'Get scheduling suggestions for a card',
+      params: idParam,
+      querystring: {
+        type: 'object',
+        properties: {
+          date: { type: 'string', description: 'YYYY-MM-DD — defaults to today' },
+        },
+      },
+      response: {
+        200: {
+          type: 'object',
+          properties: {
+            suggestions: {
+              type: 'array',
+              items: {
+                type: 'object',
+                properties: {
+                  startTime: { type: 'string', format: 'date-time' },
+                  endTime: { type: 'string', format: 'date-time' },
+                  label: { type: 'string' },
+                },
+              },
+            },
+            currentDifficulty: { type: 'integer' },
+          },
+        },
+        404: errorResponse,
+      },
+    },
+  }, async (request, reply) => {
     const { id } = request.params as any;
     const { date } = request.query as any; // YYYY-MM-DD
 
@@ -293,7 +384,31 @@ const cardsRoutes: FastifyPluginAsync<CardsRouteOptions> = async (fastify, opts)
     return { suggestions, currentDifficulty: card.difficulty };
   });
 
-  fastify.post('/cards/:id/schedule', async (request, reply) => {
+  fastify.post('/cards/:id/schedule', {
+    schema: {
+      tags: ['cards'],
+      summary: 'Schedule a card (auto-find slot or use provided time)',
+      params: idParam,
+      body: {
+        type: 'object',
+        properties: {
+          scheduledAt: { type: 'string', format: 'date-time', description: 'ISO 8601 datetime — omit for auto-scheduling' },
+          durationMinutes: { type: 'integer' },
+        },
+      },
+      response: {
+        200: {
+          type: 'object',
+          properties: {
+            success: { type: 'boolean' },
+            scheduledAt: { type: 'string', format: 'date-time' },
+          },
+        },
+        404: errorResponse,
+        409: errorResponse,
+      },
+    },
+  }, async (request, reply) => {
     const { id } = request.params as any;
     const { scheduledAt, durationMinutes } = request.body as any;
 

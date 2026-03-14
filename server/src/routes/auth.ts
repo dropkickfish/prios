@@ -2,9 +2,23 @@ import type { FastifyPluginAsync } from 'fastify';
 import { db, schema } from '../db.js';
 import { eq } from 'drizzle-orm';
 import { GOOGLE_AUTH_ENDPOINT } from '../lib/google.js';
+import { successResponse } from '../schemas/common.js';
 
 const authRoutes: FastifyPluginAsync = async (fastify) => {
-  fastify.get('/auth/google/url', async () => {
+  fastify.get('/auth/google/url', {
+    schema: {
+      tags: ['auth'],
+      summary: 'Get Google OAuth authorisation URL',
+      response: {
+        200: {
+          type: 'object',
+          properties: {
+            url: { type: 'string' },
+          },
+        },
+      },
+    },
+  }, async () => {
     const params = new URLSearchParams({
       client_id: process.env.GOOGLE_CLIENT_ID!,
       redirect_uri: process.env.GOOGLE_REDIRECT_URI!,
@@ -17,7 +31,19 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
     return { url };
   });
 
-  fastify.get('/auth/google/callback', async (request, reply) => {
+  fastify.get('/auth/google/callback', {
+    schema: {
+      tags: ['auth'],
+      summary: 'Google OAuth callback — completes token exchange',
+      querystring: {
+        type: 'object',
+        properties: {
+          code: { type: 'string' },
+        },
+        required: ['code'],
+      },
+    },
+  }, async (request, reply) => {
     const { code } = request.query as any;
 
     const tokenRes = await fetch(`${GOOGLE_AUTH_ENDPOINT}/token`, {
@@ -77,12 +103,33 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
     `);
   });
 
-  fastify.get('/auth/google/status', async () => {
+  fastify.get('/auth/google/status', {
+    schema: {
+      tags: ['auth'],
+      summary: 'Check whether Google Calendar is connected',
+      response: {
+        200: {
+          type: 'object',
+          properties: {
+            connected: { type: 'boolean' },
+          },
+        },
+      },
+    },
+  }, async () => {
     const settings = await db.select().from(schema.appSettings).where(eq(schema.appSettings.id, 'singleton'));
     return { connected: !!settings[0]?.googleRefreshToken };
   });
 
-  fastify.delete('/auth/google', async () => {
+  fastify.delete('/auth/google', {
+    schema: {
+      tags: ['auth'],
+      summary: 'Disconnect Google Calendar',
+      response: {
+        200: successResponse,
+      },
+    },
+  }, async () => {
     await db.update(schema.appSettings).set({
       googleAccessToken: null,
       googleRefreshToken: null,

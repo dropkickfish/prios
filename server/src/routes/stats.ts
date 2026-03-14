@@ -2,9 +2,19 @@ import type { FastifyPluginAsync } from 'fastify';
 import { db, schema } from '../db.js';
 import { eq, desc } from 'drizzle-orm';
 import { getOrCreateTodayStats } from '../lib/stats.js';
+import { successResponse } from '../schemas/common.js';
+import { statsResponse, userStatRecord } from '../schemas/stats.js';
 
 const statsRoutes: FastifyPluginAsync = async (fastify) => {
-  fastify.post('/stats/abandon', async () => {
+  fastify.post('/stats/abandon', {
+    schema: {
+      tags: ['stats'],
+      summary: 'Record an abandoned task',
+      response: {
+        200: successResponse,
+      },
+    },
+  }, async () => {
     const stats = await getOrCreateTodayStats();
     await db.update(schema.userStats)
       .set({ abandonedCount: (stats.abandonedCount || 0) + 1 })
@@ -12,7 +22,15 @@ const statsRoutes: FastifyPluginAsync = async (fastify) => {
     return { success: true };
   });
 
-  fastify.get('/stats', async () => {
+  fastify.get('/stats', {
+    schema: {
+      tags: ['stats'],
+      summary: 'Get aggregated stats with streak, velocity, and heatmap data',
+      response: {
+        200: statsResponse,
+      },
+    },
+  }, async () => {
     const allStats = await db.select().from(schema.userStats).orderBy(desc(schema.userStats.date));
 
     // Calculate streak
@@ -62,12 +80,36 @@ const statsRoutes: FastifyPluginAsync = async (fastify) => {
     };
   });
 
-  fastify.delete('/stats', async () => {
+  fastify.delete('/stats', {
+    schema: {
+      tags: ['stats'],
+      summary: 'Delete all stats',
+      response: {
+        200: successResponse,
+      },
+    },
+  }, async () => {
     await db.delete(schema.userStats);
     return { success: true };
   });
 
-  fastify.delete('/stats/:date', async (request, reply) => {
+  fastify.delete('/stats/:date', {
+    schema: {
+      tags: ['stats'],
+      summary: 'Delete stats for a specific date',
+      params: {
+        type: 'object',
+        properties: {
+          date: { type: 'string', pattern: '^\\d{4}-\\d{2}-\\d{2}$', description: 'YYYY-MM-DD' },
+        },
+        required: ['date'],
+      },
+      response: {
+        200: successResponse,
+        400: { type: 'object', properties: { error: { type: 'string' } } },
+      },
+    },
+  }, async (request, reply) => {
     const { date } = request.params as any; // YYYY-MM-DD
     if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return reply.status(400).send({ error: 'Invalid date format; use YYYY-MM-DD' });
     await db.delete(schema.userStats).where(eq(schema.userStats.date, date));
