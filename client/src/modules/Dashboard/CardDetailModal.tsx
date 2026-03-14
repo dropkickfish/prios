@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import type { CardType, StatusType, BoardType } from '../../types';
+import type { CardType, StatusType, BoardType, CardUpdateType, TagType } from '../../types';
 import { apiClient } from '../../api/client';
 import { queryKeys } from '../../api/queryKeys';
 import { EisenhowerMatrixHelper } from './EisenhowerMatrixHelper';
@@ -19,6 +19,12 @@ interface CardDetailModalProps {
   variant?: 'modal' | 'panel';
 }
 
+interface CardDependency {
+  id: string;
+  blockingCardId: string;
+  blockedCardId: string;
+}
+
 export const CardDetailModal: React.FC<CardDetailModalProps> = ({ card, board, statuses, allCards, onClose, onUpdated, onDeleted, variant = 'modal' }) => {
   const queryClient = useQueryClient();
 
@@ -30,35 +36,23 @@ export const CardDetailModal: React.FC<CardDetailModalProps> = ({ card, board, s
     statusId: card.statusId,
   });
 
-  // Sync formData when card updates
-  useEffect(() => {
-    setFormData(prev => ({
-        ...prev,
-        title: card.title,
-        description: card.description || '',
-        difficulty: card.difficulty,
-        priority: card.priority,
-        statusId: card.statusId,
-    }));
-  }, [card]);
-
   const [showEisenhower, setShowEisenhower] = useState(false);
   const [newComment, setNewComment] = useState('');
   const [showSchedulePicker, setShowSchedulePicker] = useState(false);
   const [newTagName, setNewTagName] = useState('');
   const [saveStatus, setSaveStatus] = useState<'saving' | 'saved' | 'error'>('saved');
 
-  const { data: updates = [], isLoading: loadingUpdates } = useQuery<any[]>({
+  const { data: updates = [], isLoading: loadingUpdates } = useQuery<CardUpdateType[]>({
     queryKey: queryKeys.cardUpdates(card.id),
     queryFn: () => apiClient.getCardUpdates(card.id),
   });
 
-  const { data: dependencies = [] } = useQuery<any[]>({
+  const { data: dependencies = [] } = useQuery<CardDependency[]>({
     queryKey: queryKeys.cardDependencies(card.id),
     queryFn: () => apiClient.getCardDependencies(card.id),
   });
 
-  const { data: availableTags = [] } = useQuery<any[]>({
+  const { data: availableTags = [] } = useQuery<TagType[]>({
     queryKey: queryKeys.tags(card.boardId),
     queryFn: () => apiClient.getTags(card.boardId),
   });
@@ -88,7 +82,7 @@ export const CardDetailModal: React.FC<CardDetailModalProps> = ({ card, board, s
 
   const toggleDependencyMutation = useMutation({
     mutationFn: async (otherCardId: string) => {
-      const existing = dependencies.find((d: any) =>
+      const existing = dependencies.find((d) =>
         (d.blockingCardId === card.id && d.blockedCardId === otherCardId) ||
         (d.blockingCardId === otherCardId && d.blockedCardId === card.id)
       );
@@ -121,45 +115,44 @@ export const CardDetailModal: React.FC<CardDetailModalProps> = ({ card, board, s
          }
        }).catch(console.error);
     }
-  }, [card.id]);
+  }, [card.id, card.scheduledAt, onUpdated]);
 
-  // Immediate feedback on changes
-  useEffect(() => {
-    const hasChanged =
+  const hasChanged = useMemo(
+    () =>
       formData.title !== card.title ||
       formData.description !== (card.description || '') ||
       formData.difficulty !== card.difficulty ||
       formData.priority !== card.priority ||
-      formData.statusId !== card.statusId;
-
-      if (hasChanged) {
-        setSaveStatus('saving');
-      }
-  }, [formData, card]);
+      formData.statusId !== card.statusId,
+    [formData, card.description, card.difficulty, card.priority, card.statusId, card.title]
+  );
 
   // Handle auto-save for formData
   useEffect(() => {
     const timer = setTimeout(async () => {
-      const hasChanged =
-        formData.title !== card.title ||
-        formData.description !== (card.description || '') ||
-        formData.difficulty !== card.difficulty ||
-        formData.priority !== card.priority ||
-        formData.statusId !== card.statusId;
-
       if (hasChanged) {
         try {
           await apiClient.updateCard(card.id, formData);
           setSaveStatus('saved');
           onUpdated();
-        } catch (err) {
+        } catch {
           setSaveStatus('error');
         }
       }
     }, 1000); // 1s debounce
 
     return () => clearTimeout(timer);
-  }, [formData, card.id]);
+  }, [
+    formData,
+    card.description,
+    card.difficulty,
+    card.id,
+    card.priority,
+    card.statusId,
+    card.title,
+    hasChanged,
+    onUpdated,
+  ]);
 
   const handleAddTag = async (tagId: string) => {
     if (card.tags?.some(t => t.id === tagId)) return;
@@ -210,7 +203,7 @@ export const CardDetailModal: React.FC<CardDetailModalProps> = ({ card, board, s
     setShowSchedulePicker(true);
   };
 
-  const onCardScheduled = (_scheduledAt: string) => {
+  const onCardScheduled = () => {
     setShowSchedulePicker(false);
     onUpdated();
   };
@@ -221,8 +214,9 @@ export const CardDetailModal: React.FC<CardDetailModalProps> = ({ card, board, s
       await apiClient.deleteCard(card.id);
       onDeleted();
       onClose();
-    } catch (error: any) {
-      alert(error.message || 'Failed to delete card');
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Failed to delete card';
+      alert(message);
     }
   };
 
@@ -412,9 +406,9 @@ export const CardDetailModal: React.FC<CardDetailModalProps> = ({ card, board, s
                     />
                     <button type="button" onClick={handleCreateTag} className="btn btn-sm btn-ghost rounded-xl">+</button>
                   </div>
-                  {newTagName && availableTags.filter((t: any) => t.name.toLowerCase().includes(newTagName.toLowerCase())).length > 0 && (
+                  {newTagName && availableTags.filter((t) => t.name.toLowerCase().includes(newTagName.toLowerCase())).length > 0 && (
                      <ul className="dropdown-content z-[60] menu p-2 shadow bg-base-100 rounded-box w-full mt-1 border border-base-content/10 max-h-40 overflow-y-auto">
-                        {availableTags.filter((t: any) => t.name.toLowerCase().includes(newTagName.toLowerCase())).map((tag: any) => (
+                        {availableTags.filter((t) => t.name.toLowerCase().includes(newTagName.toLowerCase())).map((tag) => (
                           <li key={tag.id}><a onClick={() => handleAddTag(tag.id)}>#{tag.name}</a></li>
                         ))}
                      </ul>
@@ -426,7 +420,7 @@ export const CardDetailModal: React.FC<CardDetailModalProps> = ({ card, board, s
                 <label className="block text-[10px] font-black uppercase tracking-widest text-base-content/70">Dependencies</label>
                 <div className="flex flex-wrap gap-2 max-h-32 overflow-y-auto p-3 bg-base-200/50 rounded-2xl border border-base-content/10">
                   {allCards.filter(c => c.id !== card.id).map(c => {
-                    const isDependent = dependencies.some((d: any) =>
+                    const isDependent = dependencies.some((d) =>
                         (d.blockingCardId === card.id && d.blockedCardId === c.id) ||
                         (d.blockingCardId === c.id && d.blockedCardId === card.id)
                     );
@@ -459,7 +453,7 @@ export const CardDetailModal: React.FC<CardDetailModalProps> = ({ card, board, s
             </button>
             <div className="flex items-center gap-4">
                <div className="flex items-center gap-2 min-w-[80px] justify-end">
-                  {saveStatus === 'saving' ? (
+                  {saveStatus === 'saving' || hasChanged ? (
                     <div className="flex items-center gap-2">
                        <span className="loading loading-spinner loading-xs text-primary"></span>
                        <span className="text-[10px] font-black uppercase text-primary tracking-widest animate-pulse">Saving...</span>
