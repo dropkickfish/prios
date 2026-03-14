@@ -5,6 +5,12 @@
 html, body {
   overflow-x: hidden;
 }
+
+/* iOS safe area insets for notch/dynamic island */
+body {
+  padding-top: env(safe-area-inset-top);
+  padding-bottom: env(safe-area-inset-bottom);
+}
 @plugin "@tailwindcss/typography";
 @plugin "daisyui" {
   themes: winter, night;
