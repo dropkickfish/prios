@@ -31,6 +31,17 @@ import { DraggableCard, DroppableColumn } from './BoardViewParts';
 import { BacklogSection } from './BacklogSection';
 import { ArchiveSection } from './ArchiveSection';
 
+const BOARD_STATUS_DOT_CLASS: Record<string, string> = {
+  primary: 'bg-primary',
+  secondary: 'bg-secondary',
+  accent: 'bg-accent',
+  neutral: 'bg-neutral',
+  info: 'bg-info',
+  success: 'bg-success',
+  warning: 'bg-warning',
+  error: 'bg-error',
+};
+
 
 export const BoardView = () => {
   const { boardId } = useParams<{ boardId: string }>();
@@ -72,7 +83,7 @@ export const BoardView = () => {
   // Store viewerCardId so the viewer stays in sync with the cached card data
   const [viewerCardId, setViewerCardId] = useState<string | null>(null);
   const [showSettingsModal, setShowSettingsModal] = useState(false);
-  const [collapsedCategories, setCollapsedCategories] = useState<string[]>(['maybe', 'scheduled', 'done', 'wontdo']);
+  const [collapsedCategories, setCollapsedCategories] = useState<string[]>(['done', 'wontdo']);
   const [filterText, setFilterText] = useState('');
   const [showFilter, setShowFilter] = useState(false);
   const [focusConflict, setFocusConflict] = useState<{ cardToMove: CardType; currentDoing: CardType } | null>(null);
@@ -248,12 +259,6 @@ export const BoardView = () => {
     return filtered;
   };
 
-  const statusDisplayName = (status: StatusType) => {
-    if (status.category === 'maybe') return 'To do';
-    if (status.category === 'doing') return 'FOCUS';
-    return status.name;
-  };
-
   const toggleColumn = (category: string) => {
     setCollapsedCategories(prev =>
       prev.includes(category) ? prev.filter(c => c !== category) : [...prev, category]
@@ -261,8 +266,8 @@ export const BoardView = () => {
   };
 
   const toggleSection = (section: 'backlog' | 'archive') => {
-    const categories = section === 'backlog' ? ['maybe', 'scheduled'] : ['done', 'wontdo'];
-    const otherCategories = section === 'backlog' ? ['done', 'wontdo'] : ['maybe', 'scheduled'];
+    const categories = section === 'backlog' ? ['maybe'] : ['done', 'wontdo'];
+    const otherCategories = section === 'backlog' ? ['done', 'wontdo'] : ['maybe'];
     const allCollapsed = categories.every(c => collapsedCategories.includes(c));
     if (allCollapsed) {
       setCollapsedCategories(prev => {
@@ -276,7 +281,7 @@ export const BoardView = () => {
 
   const doingStatus = statuses.find(s => s.category === 'doing');
   const scheduledStatus = statuses.find(s => s.category === 'scheduled');
-  const backlogCollapsed = collapsedCategories.includes('maybe') && collapsedCategories.includes('scheduled');
+  const backlogCollapsed = collapsedCategories.includes('maybe');
   const archiveCollapsed = collapsedCategories.includes('done') && collapsedCategories.includes('wontdo');
 
   if (loading) {
@@ -396,7 +401,7 @@ export const BoardView = () => {
             <p className="text-[10px] uppercase tracking-[0.2em] text-primary/70 font-semibold mb-1">Execution board</p>
             <div className="flex items-center gap-2 flex-wrap">
               <BoardSwitcher currentBoard={board} onSwitch={(id) => navigate(`/boards/${id}`)} />
-              <button onClick={() => setShowSettingsModal(true)} className="btn btn-ghost btn-circle btn-sm w-11 h-11 min-h-11 shrink-0 text-base-content/70 hover:text-base-content" title="Board settings">
+              <button onClick={() => setShowSettingsModal(true)} className="btn btn-ghost btn-sm h-10 min-h-10 rounded-lg px-2.5 shrink-0 text-base-content/70 hover:text-base-content" title="Board settings">
                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87.074.04.147.083.22.127.324.196.72.257 1.075.124l1.217-.456a1.125 1.125 0 011.37.49l1.296 2.247a1.125 1.125 0 01-.26 1.431l-1.003.827c-.293.24-.438.613-.431.992a6.759 6.759 0 010 .255c-.007.378.138.75.43.99l1.005.828c.424.35.534.954.26 1.43l-1.298 2.247a1.125 1.125 0 01-1.369.491l-1.217-.456c-.355-.133-.75-.072-1.076.124a6.57 6.57 0 01-.22.128c-.331.183-.581.495-.644.869l-.213 1.28c-.09.543-.56.941-1.11.941h-2.594c-.55 0-1.02-.398-1.11-.94l-.213-1.281c-.062-.374-.312-.686-.644-.87a6.52 6.52 0 01-.22-.127c-.325-.196-.72-.257-1.076-.124l-1.217.456a1.125 1.125 0 01-1.369-.49l-1.297-2.247a1.125 1.125 0 01.26-1.431l1.004-.827c.292-.24.437-.613.43-.992a6.932 6.932 0 010-.255c.007-.378-.138-.75-.43-.99l-1.004-.828a1.125 1.125 0 01-.26-1.43l1.297-2.247a1.125 1.125 0 011.37-.491l1.216.456c.356.133.751.072 1.076-.124.072-.044.146-.087.22-.128.332-.183.582-.495.644-.869l.214-1.281z" />
                   <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
@@ -404,16 +409,11 @@ export const BoardView = () => {
               </button>
             </div>
             <div className="mt-2 inline-flex items-center gap-2 rounded-full bg-base-200/70 px-3 py-1.5 text-[11px] font-semibold tracking-wide text-base-content/75">
-              <span className={`w-2 h-2 rounded-full animate-pulse bg-${board.colour || 'primary'}`}></span>
+              <span className={`w-2 h-2 rounded-full ${BOARD_STATUS_DOT_CLASS[board.colour || 'primary'] || 'bg-primary'}`}></span>
               {doingStatus && getCardsByStatus(doingStatus.id).length > 0 ? '1 task in focus' : 'Focus slot empty'}
             </div>
-            <div className="mt-2 flex flex-wrap items-center gap-3 text-xs font-semibold">
-              <button type="button" onClick={() => navigate(`/boards/${boardId}/prioritise`)} className="text-primary hover:text-primary/80 transition-colors font-bold">
-                Prioritise backlog
-              </button>
-              <button type="button" onClick={openQuickAdd} className="text-base-content/70 hover:text-base-content transition-colors">
-                Quick add task
-              </button>
+            <div className="mt-2 text-xs text-base-content/65">
+              Queue tasks in Backlog, then run Prioritise to choose the next best task.
             </div>
           </div>
           <div className={`flex shrink-0 items-center justify-end min-w-0 ml-auto ${showFilter || filterText ? 'w-full sm:w-auto' : ''}`}>
@@ -471,11 +471,8 @@ export const BoardView = () => {
           <BacklogSection
             statuses={statuses}
             getCardsByStatus={getCardsByStatus}
-            collapsedCategories={collapsedCategories}
             backlogCollapsed={backlogCollapsed}
             toggleSection={toggleSection}
-            toggleColumn={toggleColumn}
-            boardId={boardId!}
             navigateToPrioritise={() => navigate(`/boards/${boardId}/prioritise`)}
             modalOpen={!!(showCreateModal || viewerCard || schedulingCard)}
             setSelectedStatusId={setSelectedStatusId}
@@ -483,17 +480,16 @@ export const BoardView = () => {
             onCardClick={(card) => setViewerCardId(card.id)}
             onStatusChange={(cardId, newStatusId) => handleStatusChange(cardId, newStatusId)}
             onSchedule={handleSchedule}
-            statusDisplayName={statusDisplayName}
           />
 
           {/* FOCUS: always visible at top — order-1 */}
           {doingStatus && (
-            <div className="order-1 flex-1 min-w-0 flex flex-col gap-3 px-2 w-full rounded-2xl border border-base-content/10 bg-base-100/70 py-3">
+            <div className="order-1 flex-1 min-w-0 flex flex-col gap-3 px-2 w-full rounded-xl border border-base-content/15 bg-base-100 py-3">
               <div className="flex items-center gap-3 px-3">
-                <div className="w-1 h-8 rounded-full bg-primary" />
-                <h2 className="text-sm font-black uppercase tracking-[0.18em] text-primary">Focus lane</h2>
-                <span className="badge badge-primary badge-sm font-bold" title="One task at a time - swap or finish current to add another">1 slot</span>
-                <span className="text-[11px] tracking-wide opacity-50 hidden sm:inline">Single-task mode</span>
+                <div className="w-1 h-8 rounded-full bg-base-content/40" />
+                <h2 className="text-sm font-bold uppercase tracking-[0.14em] text-base-content">Focus lane</h2>
+                <span className="badge badge-neutral badge-sm font-semibold" title="One task at a time - swap or finish current to add another">1 slot</span>
+                <span className="text-[11px] tracking-wide text-base-content/70 hidden sm:inline">Single-task mode</span>
               </div>
               <div className="flex-1 min-h-0 flex flex-col max-h-[45vh] md:max-h-none">
                 <DroppableColumn statusId={doingStatus.id} className="flex-1 min-h-0 overflow-hidden">
@@ -585,7 +581,7 @@ export const BoardView = () => {
               <button
                 type="button"
                 onClick={openQuickAdd}
-                className="btn btn-primary btn-circle w-12 h-12 md:w-14 md:h-14 text-2xl border border-base-100/80 shadow-sm"
+                className="btn btn-primary h-12 min-h-12 w-12 md:h-14 md:min-h-14 md:w-14 rounded-lg text-2xl border border-base-100/80 shadow-sm"
                 title={`New card (${shortcuts.new_card?.key ? shortcuts.new_card.key.toUpperCase() : 'N'})`}
               >
                 +

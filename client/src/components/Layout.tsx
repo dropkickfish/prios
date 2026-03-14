@@ -54,7 +54,7 @@ export const Layout = ({ children }: LayoutProps) => {
           to="/"
           end
           className={({ isActive }) =>
-            `flex-1 flex flex-col items-center justify-center py-2 gap-0.5 text-[10px] font-bold uppercase tracking-widest transition-colors ${isActive ? 'text-primary' : 'text-base-content/40'}`
+            `flex-1 flex flex-col items-center justify-center py-2 gap-0.5 text-[10px] font-bold uppercase tracking-widest transition-colors ${isActive ? 'text-primary' : 'text-base-content/55'}`
           }
         >
           <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5">
@@ -65,7 +65,7 @@ export const Layout = ({ children }: LayoutProps) => {
         <NavLink
           to="/stats"
           className={({ isActive }) =>
-            `flex-1 flex flex-col items-center justify-center py-2 gap-0.5 text-[10px] font-bold uppercase tracking-widest transition-colors ${isActive ? 'text-primary' : 'text-base-content/40'}`
+            `flex-1 flex flex-col items-center justify-center py-2 gap-0.5 text-[10px] font-bold uppercase tracking-widest transition-colors ${isActive ? 'text-primary' : 'text-base-content/55'}`
           }
         >
           <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5">
@@ -76,7 +76,7 @@ export const Layout = ({ children }: LayoutProps) => {
         <NavLink
           to="/settings"
           className={({ isActive }) =>
-            `flex-1 flex flex-col items-center justify-center py-2 gap-0.5 text-[10px] font-bold uppercase tracking-widest transition-colors ${isActive ? 'text-primary' : 'text-base-content/40'}`
+            `flex-1 flex flex-col items-center justify-center py-2 gap-0.5 text-[10px] font-bold uppercase tracking-widest transition-colors ${isActive ? 'text-primary' : 'text-base-content/55'}`
           }
         >
           <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5">

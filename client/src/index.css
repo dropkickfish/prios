@@ -1,3 +1,4 @@
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;600&family=IBM+Plex+Sans:wght@400;500;600;700&family=Manrope:wght@600;700;800&display=swap');
 @import "tailwindcss";
 
 /* Prevent swiped/dragged elements from expanding the layout viewport on mobile */
@@ -11,6 +12,166 @@ html, body {
 
 @source "../index.html";
 @source "./**/*.{js,ts,jsx,tsx}";
+
+/* Editorial baseline and developer-friendly typography */
+:root {
+  --font-body: "IBM Plex Sans", ui-sans-serif, sans-serif;
+  --font-display: "Manrope", ui-sans-serif, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, monospace;
+}
+
+body {
+  font-family: var(--font-body);
+  text-rendering: optimizeLegibility;
+}
+
+h1, h2, h3, .font-display {
+  font-family: var(--font-display);
+  letter-spacing: -0.015em;
+}
+
+code, pre {
+  font-family: var(--font-mono);
+}
+
+/* Keep keyboard hints integrated with UI typography */
+kbd {
+  font-family: var(--font-body);
+  font-weight: 600;
+  letter-spacing: 0.015em;
+}
+
+/* Crisp editorial neutral system (light) */
+html[data-theme="winter"] {
+  --color-base-100: oklch(98.8% 0.004 250);
+  --color-base-200: oklch(96.2% 0.008 250);
+  --color-base-300: oklch(91.8% 0.011 252);
+  --color-base-content: oklch(20.8% 0.02 255);
+  --color-neutral: oklch(28% 0.016 255);
+  --color-neutral-content: oklch(97.6% 0.006 250);
+}
+
+/* Crisp editorial neutral system (dark) */
+html[data-theme="night"] {
+  --color-base-100: oklch(21.5% 0.012 255);
+  --color-base-200: oklch(24.5% 0.013 255);
+  --color-base-300: oklch(29% 0.013 255);
+  --color-base-content: oklch(96% 0.01 255);
+  --color-neutral: oklch(31% 0.014 255);
+  --color-neutral-content: oklch(95% 0.008 255);
+}
+
+/* User-selectable accent palettes */
+html[data-accent="cobalt"],
+html:not([data-accent]) {
+  --color-primary: oklch(41% 0.14 248);
+  --color-primary-content: oklch(97.8% 0.006 255);
+  --color-secondary: oklch(35% 0.11 238);
+  --color-secondary-content: oklch(97.2% 0.006 248);
+  --color-accent: oklch(47% 0.12 228);
+  --color-accent-content: oklch(97.8% 0.006 228);
+}
+
+html[data-accent="cyan"] {
+  --color-primary: oklch(44% 0.13 220);
+  --color-primary-content: oklch(97.8% 0.006 220);
+  --color-secondary: oklch(37% 0.11 205);
+  --color-secondary-content: oklch(97.2% 0.006 205);
+  --color-accent: oklch(48% 0.11 195);
+  --color-accent-content: oklch(97.8% 0.006 195);
+}
+
+html[data-accent="emerald"] {
+  --color-primary: oklch(57% 0.12 160);
+  --color-primary-content: oklch(15% 0.02 165);
+  --color-secondary: oklch(49% 0.09 185);
+  --color-secondary-content: oklch(96% 0.01 185);
+  --color-accent: oklch(62% 0.11 145);
+  --color-accent-content: oklch(18% 0.02 150);
+}
+
+html[data-accent="amber"] {
+  --color-primary: oklch(67% 0.15 75);
+  --color-primary-content: oklch(21% 0.03 70);
+  --color-secondary: oklch(57% 0.11 55);
+  --color-secondary-content: oklch(97% 0.01 75);
+  --color-accent: oklch(63% 0.16 95);
+  --color-accent-content: oklch(20% 0.03 95);
+}
+
+html[data-accent="rose"] {
+  --color-primary: oklch(48% 0.2 14);
+  --color-primary-content: oklch(97.5% 0.008 20);
+  --color-secondary: oklch(42% 0.14 4);
+  --color-secondary-content: oklch(97% 0.008 10);
+  --color-accent: oklch(52% 0.19 350);
+  --color-accent-content: oklch(20% 0.02 352);
+}
+
+html[data-accent="graphite"] {
+  --color-primary: oklch(43% 0.02 255);
+  --color-primary-content: oklch(96.5% 0.006 255);
+  --color-secondary: oklch(38% 0.016 255);
+  --color-secondary-content: oklch(95.5% 0.006 255);
+  --color-accent: oklch(52% 0.02 250);
+  --color-accent-content: oklch(97.2% 0.006 250);
+}
+
+/* Dark-mode accent overrides to keep color contrast strong */
+html[data-theme="night"][data-accent="cobalt"],
+html[data-theme="night"]:not([data-accent]) {
+  --color-primary: oklch(75% 0.11 248);
+  --color-primary-content: oklch(18% 0.01 248);
+  --color-secondary: oklch(69% 0.09 238);
+  --color-secondary-content: oklch(18% 0.01 238);
+  --color-accent: oklch(78% 0.1 228);
+  --color-accent-content: oklch(19% 0.01 228);
+}
+
+html[data-theme="night"][data-accent="cyan"] {
+  --color-primary: oklch(76% 0.1 220);
+  --color-primary-content: oklch(18% 0.01 220);
+  --color-secondary: oklch(70% 0.09 205);
+  --color-secondary-content: oklch(18% 0.01 205);
+  --color-accent: oklch(78% 0.08 195);
+  --color-accent-content: oklch(19% 0.01 195);
+}
+
+html[data-theme="night"][data-accent="rose"] {
+  --color-primary: oklch(74% 0.14 14);
+  --color-primary-content: oklch(19% 0.01 14);
+  --color-secondary: oklch(69% 0.12 4);
+  --color-secondary-content: oklch(19% 0.01 4);
+  --color-accent: oklch(79% 0.12 350);
+  --color-accent-content: oklch(19% 0.01 350);
+}
+
+html[data-theme="night"][data-accent="emerald"] {
+  --color-primary: oklch(77% 0.09 160);
+  --color-primary-content: oklch(17% 0.01 160);
+  --color-secondary: oklch(70% 0.08 185);
+  --color-secondary-content: oklch(17% 0.01 185);
+  --color-accent: oklch(79% 0.08 145);
+  --color-accent-content: oklch(18% 0.01 145);
+}
+
+html[data-theme="night"][data-accent="amber"] {
+  --color-primary: oklch(81% 0.11 80);
+  --color-primary-content: oklch(20% 0.01 80);
+  --color-secondary: oklch(75% 0.09 60);
+  --color-secondary-content: oklch(20% 0.01 60);
+  --color-accent: oklch(82% 0.1 95);
+  --color-accent-content: oklch(20% 0.01 95);
+}
+
+html[data-theme="night"][data-accent="graphite"] {
+  --color-primary: oklch(78% 0.01 255);
+  --color-primary-content: oklch(19% 0.005 255);
+  --color-secondary: oklch(72% 0.01 255);
+  --color-secondary-content: oklch(19% 0.005 255);
+  --color-accent: oklch(82% 0.01 250);
+  --color-accent-content: oklch(19% 0.005 250);
+}
 
 /* Typography Overrides */
 .prose {

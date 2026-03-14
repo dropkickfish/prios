@@ -36,6 +36,17 @@ interface SortableBoardCardProps {
   onEdit: (board: BoardType) => void;
 }
 
+const BOARD_ACCENT_BAR_CLASS: Record<string, string> = {
+  primary: 'bg-primary',
+  secondary: 'bg-secondary',
+  accent: 'bg-accent',
+  neutral: 'bg-neutral',
+  info: 'bg-info',
+  success: 'bg-success',
+  warning: 'bg-warning',
+  error: 'bg-error',
+};
+
 const SortableBoardCard = ({ board, index, onEdit }: SortableBoardCardProps) => {
   const navigate = useNavigate();
   const {
@@ -64,7 +75,7 @@ const SortableBoardCard = ({ board, index, onEdit }: SortableBoardCardProps) => 
       className="group relative rounded-xl border border-base-content/12 bg-base-100/80 transition-colors hover:border-base-content/25 cursor-pointer"
     >
       <div className="flex items-start gap-3 px-4 py-4 sm:px-5 sm:py-5">
-        <div className={`mt-1 h-10 w-1 bg-${board.colour || 'secondary'} opacity-60`} aria-hidden />
+        <div className={`mt-1 h-10 w-1 opacity-60 ${BOARD_ACCENT_BAR_CLASS[board.colour || 'secondary'] || 'bg-secondary'}`} aria-hidden />
         <div className="min-w-0 flex-1">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">

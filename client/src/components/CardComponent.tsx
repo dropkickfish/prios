@@ -139,7 +139,7 @@ export const CardComponent = ({ card, statuses, onStatusChange, onClick, onSched
                     if (!html) return null;
                     return (
                       <div className="flex flex-col gap-0 flex-1 min-h-0">
-                        <p className="text-[10px] font-bold uppercase tracking-widest opacity-50 mb-0.5 shrink-0">Description</p>
+                        <p className="text-[10px] font-bold uppercase tracking-widest text-base-content/65 mb-0.5 shrink-0">Description</p>
                         <div
                           className="text-sm opacity-80 leading-relaxed break-words overflow-y-auto min-h-0 flex-1 prose prose-sm max-w-none dark:prose-invert prose-p:my-1 prose-p:first:mt-0"
                           dangerouslySetInnerHTML={{ __html: html }}
@@ -175,7 +175,7 @@ export const CardComponent = ({ card, statuses, onStatusChange, onClick, onSched
                   if (isFullHtml) {
                     return (
                       <div className={useFullHeight ? 'flex flex-col min-h-0 shrink-0' : ''}>
-                        <p className="text-[10px] font-bold uppercase tracking-widest opacity-50 mb-1">Description</p>
+                        <p className="text-[10px] font-bold uppercase tracking-widest text-base-content/65 mb-1">Description</p>
                         <TipTapViewer
                           content={card.description as string}
                           className="text-sm opacity-90 leading-relaxed break-words"
@@ -189,7 +189,7 @@ export const CardComponent = ({ card, statuses, onStatusChange, onClick, onSched
                   const backlogClamp = variant === 'backlog' ? 'line-clamp-2 overflow-hidden' : '';
                   return (
                     <div className={useFullHeight ? 'flex flex-col min-h-0 shrink-0' : ''}>
-                      <p className="text-[10px] font-bold uppercase tracking-widest opacity-50 mb-1">Description</p>
+                      <p className="text-[10px] font-bold uppercase tracking-widest text-base-content/65 mb-1">Description</p>
                       <div
                         className={`text-sm opacity-80 leading-relaxed break-words prose prose-sm max-w-none dark:prose-invert prose-p:my-1 prose-p:first:mt-0 ${mobileClampClass} ${backlogClamp} ${variant === 'triage' ? 'line-clamp-3' : ''}`}
                         dangerouslySetInnerHTML={{ __html: html }}
@@ -235,7 +235,7 @@ export const CardComponent = ({ card, statuses, onStatusChange, onClick, onSched
             {card.tags.map(tag => (
               <span
                 key={tag.id}
-                className="text-[8px] font-black uppercase px-2 py-0.5 rounded-full bg-base-content/5 text-base-content/60 border border-base-content/10 group-hover/card:bg-primary/10 group-hover/card:text-primary group-hover/card:border-primary/20 transition-colors"
+                className="text-[9px] font-black uppercase px-2 py-0.5 rounded-full bg-base-content/8 text-base-content/85 border border-base-content/15 group-hover/card:bg-primary/12 group-hover/card:text-primary group-hover/card:border-primary/25 transition-colors"
                 title={`#${tag.name}`}
               >
                 #{tag.name}
@@ -264,7 +264,7 @@ export const CardComponent = ({ card, statuses, onStatusChange, onClick, onSched
                             <button 
                                 key={s.id}
                                 onClick={(e) => { e.stopPropagation(); onStatusChange(card.id, s.id); }}
-                                className="btn btn-xs btn-ghost h-6 min-h-0 text-[9px] uppercase font-bold tracking-tight hover:bg-base-content/5 text-base-content/50 hover:text-base-content px-2 rounded-md"
+                                className="btn btn-xs btn-ghost h-6 min-h-0 text-[9px] uppercase font-bold tracking-tight hover:bg-base-content/5 text-base-content/70 hover:text-base-content px-2 rounded-md"
                             >
                                 {s.name}
                             </button>

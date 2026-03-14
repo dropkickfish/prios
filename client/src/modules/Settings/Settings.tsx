@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '../../api/client';
 import { queryKeys } from '../../api/queryKeys';
 import { ThemeController } from '../../components/ThemeController';
+import { AccentController } from '../../components/AccentController';
 import { KeyboardSettings } from './KeyboardSettings';
 import { TriageSettings } from './TriageSettings';
 
@@ -38,14 +39,14 @@ export const Settings = () => {
   if (isLoading) return <div className="flex justify-center p-20"><span className="loading loading-spinner loading-lg"></span></div>;
 
   return (
-    <div className="max-w-2xl mx-auto py-10 space-y-12">
+    <div className="mx-auto max-w-3xl space-y-10 py-10">
       <header>
-        <h1 className="text-4xl font-black text-primary">Settings</h1>
-        <p className="opacity-60">Manage your integrations and preferences.</p>
+        <h1 className="text-4xl font-bold text-base-content">Settings</h1>
+        <p className="mt-1 text-base-content/65">Manage your integrations and preferences.</p>
       </header>
 
-      <section className="card bg-base-100 shadow-xl border border-base-200 p-8">
-        <h2 className="text-xl font-black mb-6 flex items-center gap-2">
+      <section className="rounded-xl border border-base-content/10 bg-base-100/80 p-7">
+        <h2 className="mb-6 flex items-center gap-2 text-xl font-bold text-base-content">
           <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
           Google Calendar
         </h2>
@@ -53,13 +54,13 @@ export const Settings = () => {
         <div className="flex items-center justify-between">
           <div>
             <p className="font-bold">Sync your availability</p>
-            <p className="text-sm opacity-50">Checking calendar for conflicts and auto-scheduling "Doing" tasks.</p>
+            <p className="text-sm text-base-content/65">Checking calendar for conflicts and auto-scheduling "Doing" tasks.</p>
           </div>
 
           {connected ? (
             <div className="flex items-center gap-4">
-              <div className="flex items-center gap-2 text-success font-black uppercase text-xs">
-                <span className="h-2 w-2 bg-success rounded-full animate-pulse"></span>
+              <div className="flex items-center gap-2 text-success text-xs font-semibold uppercase tracking-[0.12em]">
+                <span className="h-2 w-2 rounded-full bg-success"></span>
                 Connected
               </div>
               <button onClick={handleDisconnect} className="btn btn-ghost btn-xs opacity-30 hover:opacity-100 hover:text-error">
@@ -67,15 +68,15 @@ export const Settings = () => {
               </button>
             </div>
           ) : (
-            <button onClick={handleConnect} className="btn btn-primary rounded-2xl shadow-lg shadow-primary/20 border-none px-6">
+            <button onClick={handleConnect} className="btn btn-primary rounded-lg border-none px-6">
               Connect Calendar
             </button>
           )}
         </div>
       </section>
 
-      <section className="card bg-base-100 shadow-xl border border-base-200 p-8">
-        <h2 className="text-xl font-black mb-6 flex items-center gap-2">
+      <section className="rounded-xl border border-base-content/10 bg-base-100/80 p-7">
+        <h2 className="mb-6 flex items-center gap-2 text-xl font-bold text-base-content">
           <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01" /></svg>
           Appearance
         </h2>
@@ -83,10 +84,19 @@ export const Settings = () => {
         <div className="flex items-center justify-between">
           <div>
             <p className="font-bold">Application Theme</p>
-            <p className="text-sm opacity-50">Select your preferred visual style.</p>
+            <p className="text-sm text-base-content/65">Select your preferred visual style.</p>
           </div>
 
           <ThemeController />
+        </div>
+        <div className="mt-6 border-t border-base-content/10 pt-6">
+          <div className="flex flex-col gap-3">
+            <div>
+              <p className="font-bold">Accent Color</p>
+              <p className="text-sm text-base-content/65">Pick a personal accent without changing the clean base palette.</p>
+            </div>
+            <AccentController />
+          </div>
         </div>
       </section>
 
@@ -94,11 +104,11 @@ export const Settings = () => {
 
       <TriageSettings />
 
-      <section className="card bg-base-100 shadow-xl border border-base-200 p-8 opacity-40 grayscale pointer-events-none">
-        <h2 className="text-xl font-black mb-6 flex items-center gap-2">
-           🔒 More Integrations Coming Soon
+      <section className="rounded-xl border border-base-content/10 bg-base-100/70 p-7 opacity-65 grayscale pointer-events-none">
+        <h2 className="mb-6 text-xl font-semibold text-base-content">
+           More integrations coming soon
         </h2>
-        <p className="text-sm">Slack, GitHub, and Jira integrations are in the works.</p>
+        <p className="text-sm text-base-content/70">Slack, GitHub, and Jira integrations are in the works.</p>
       </section>
     </div>
   );

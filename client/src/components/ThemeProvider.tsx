@@ -1,17 +1,31 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
 
 type Theme = 'winter' | 'night' | 'system';
+type Accent = 'cobalt' | 'cyan' | 'emerald' | 'amber' | 'rose' | 'graphite';
 
 interface ThemeContextType {
   theme: Theme;
   setTheme: (theme: Theme) => void;
+  accent: Accent;
+  setAccent: (accent: Accent) => void;
 }
 
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 
+const normalizeAccent = (value: string | null): Accent => {
+  if (value === 'indigo') return 'cobalt';
+  if (value === 'cobalt' || value === 'cyan' || value === 'emerald' || value === 'amber' || value === 'rose' || value === 'graphite') {
+    return value;
+  }
+  return 'cobalt';
+};
+
 export const ThemeProvider =({ children }: { children: ReactNode }) => {
   const [theme, setTheme] = useState<Theme>(() => {
     return (localStorage.getItem('theme') as Theme) || 'system';
+  });
+  const [accent, setAccent] = useState<Accent>(() => {
+    return normalizeAccent(localStorage.getItem('accent'));
   });
 
   useEffect(() => {
@@ -41,8 +55,14 @@ export const ThemeProvider =({ children }: { children: ReactNode }) => {
     }
   }, [theme]);
 
+  useEffect(() => {
+    const root = window.document.documentElement;
+    root.setAttribute('data-accent', accent);
+    localStorage.setItem('accent', accent);
+  }, [accent]);
+
   return (
-    <ThemeContext.Provider value={{ theme, setTheme }}>
+    <ThemeContext.Provider value={{ theme, setTheme, accent, setAccent }}>
       {children}
     </ThemeContext.Provider>
   );

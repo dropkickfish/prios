@@ -8,6 +8,17 @@ interface BoardSwitcherProps {
   onSwitch: (boardId: string) => void;
 }
 
+const BOARD_TITLE_COLOR_CLASS: Record<string, string> = {
+  primary: 'text-primary',
+  secondary: 'text-secondary',
+  accent: 'text-accent',
+  neutral: 'text-neutral',
+  info: 'text-info',
+  success: 'text-success',
+  warning: 'text-warning',
+  error: 'text-error',
+};
+
 export const BoardSwitcher = ({ currentBoard, onSwitch }: BoardSwitcherProps) => {
   const [isOpen, setIsOpen] = useState(false);
   const [boards, setBoards] = useState<BoardType[]>([]);
@@ -52,7 +63,7 @@ export const BoardSwitcher = ({ currentBoard, onSwitch }: BoardSwitcherProps) =>
     <div className="relative" ref={dropdownRef}>
       <button 
         onClick={() => setIsOpen(!isOpen)}
-        className={`min-h-[44px] px-1 text-2xl sm:text-4xl font-black tracking-tight hover:opacity-80 transition-opacity flex items-center gap-2 group text-${currentBoard.colour || 'base-content'}`}
+        className={`min-h-[44px] px-1 text-2xl sm:text-4xl font-black tracking-tight hover:opacity-80 transition-opacity flex items-center gap-2 group ${currentBoard.colour ? BOARD_TITLE_COLOR_CLASS[currentBoard.colour] || 'text-base-content' : 'text-base-content'}`}
         aria-label="Switch board"
       >
         {currentBoard.name}

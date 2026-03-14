@@ -5,26 +5,25 @@ type Theme = 'winter' | 'night' | 'system';
 export const ThemeController = () => {
   const { theme, setTheme } = useTheme();
 
-  const themes: { id: Theme; label: string; icon: string }[] = [
-    { id: 'winter', label: 'Light', icon: '☀️' },
-    { id: 'night', label: 'Dark', icon: '🌙' },
-    { id: 'system', label: 'System', icon: '💻' },
+  const themes: { id: Theme; label: string }[] = [
+    { id: 'winter', label: 'Light' },
+    { id: 'night', label: 'Dark' },
+    { id: 'system', label: 'System' },
   ];
 
   return (
-    <div className="join bg-base-200/50 p-1 rounded-2xl border border-base-content/5">
+    <div className="join rounded-lg border border-base-content/10 bg-base-200/40 p-1">
       {themes.map((t) => (
         <button
           key={t.id}
           onClick={() => setTheme(t.id)}
-          className={`join-item btn btn-sm border-none px-4 h-10 gap-2 normal-case transition-all ${
+          className={`join-item btn btn-sm h-10 border-none px-4 normal-case transition-colors ${
             theme === t.id 
-              ? 'bg-base-100 shadow-sm text-primary' 
-              : 'bg-transparent hover:bg-base-content/5 text-base-content/40'
+              ? 'bg-base-100 text-primary' 
+              : 'bg-transparent text-base-content/55 hover:bg-base-content/5 hover:text-base-content/85'
           }`}
         >
-          <span className="text-base">{t.icon}</span>
-          <span className="text-[10px] font-black uppercase tracking-widest">{t.label}</span>
+          <span className="text-[11px] font-semibold uppercase tracking-[0.14em]">{t.label}</span>
         </button>
       ))}
     </div>
