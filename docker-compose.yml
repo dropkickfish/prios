@@ -1,0 +1,26 @@
+services:
+  app:
+    build: .
+    ports:
+      - "3000:3000"
+    volumes:
+      - prios-data:/data
+    environment:
+      - DATABASE_URL=/data/sqlite.db
+      - PUBLIC_DIR=/app/client/dist
+      - STORAGE_LOCAL_PATH=/data/uploads
+      # Uncomment and set to require bearer token auth:
+      # - API_KEY=your-secret-key-here
+      # Google Calendar (optional):
+      # - GOOGLE_CLIENT_ID=
+      # - GOOGLE_CLIENT_SECRET=
+      # - GOOGLE_REDIRECT_URI=http://localhost:3000/api/auth/google/callback
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+volumes:
+  prios-data:
