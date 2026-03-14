@@ -14,7 +14,7 @@ COPY server/package*.json ./
 RUN npm install
 COPY server/ ./
 RUN npm run build
-# Prune to prod-only deps (native modules already compiled)
+# Prune dev deps — drizzle-kit stays as it's needed at runtime for migrations
 RUN npm prune --omit=dev
 
 # Stage 3: Runtime

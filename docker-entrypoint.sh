@@ -2,7 +2,7 @@
 set -e
 
 echo "Running database migrations..."
-npx drizzle-kit push
+./node_modules/.bin/drizzle-kit push
 
 echo "Starting server..."
 exec node dist/index.js
