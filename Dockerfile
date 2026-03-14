@@ -8,19 +8,21 @@ RUN npm run build
 
 # Stage 2: Build server
 FROM node:22-alpine AS build-server
+RUN apk add --no-cache python3 make g++
 WORKDIR /app/server
 COPY server/package*.json ./
 RUN npm ci
 COPY server/ ./
 RUN npm run build
+# Prune to prod-only deps (native modules already compiled)
+RUN npm prune --omit=dev
 
 # Stage 3: Runtime
 FROM node:22-alpine AS runtime
 WORKDIR /app/server
 
-# Install production dependencies only
-COPY server/package*.json ./
-RUN npm ci --omit=dev
+# Copy prod node_modules with compiled native addons
+COPY --from=build-server /app/server/node_modules ./node_modules
 
 # Copy compiled server
 COPY --from=build-server /app/server/dist ./dist
