@@ -37,6 +37,12 @@ services:
       # - AUTH_OIDC_REDIRECT_URI=https://prios.example.com/api/auth/oidc/callback
       # - AUTH_OIDC_DISPLAY_NAME=Authentik
 
+      # Set TRUST_PROXY=true when a reverse proxy (nginx, Caddy, Traefik) runs
+      # on the same host. Required for AUTH_ENABLED to work correctly — without
+      # it, every proxied request appears to come from 127.0.0.1 and auth is
+      # silently bypassed.
+      # - TRUST_PROXY=false
+
       # Trusted reverse proxy IPs (comma-separated IPs/CIDRs).
       # Set if running behind oauth2-proxy on a different host so forwarded
       # identity headers are accepted.

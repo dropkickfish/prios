@@ -28,7 +28,8 @@ const PORT = Number(process.env.PORT) || 3000;
 const PUBLIC_DIR = process.env.PUBLIC_DIR ? path.resolve(process.env.PUBLIC_DIR) : null;
 const storage = createStorage();
 
-const fastify = Fastify({ logger: true });
+const trustProxy = process.env.TRUST_PROXY === 'true' || process.env.TRUST_PROXY === '1';
+const fastify = Fastify({ logger: true, trustProxy });
 
 await fastify.register(swagger, {
   openapi: {
