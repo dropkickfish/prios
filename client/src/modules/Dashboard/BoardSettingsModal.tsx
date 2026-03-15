@@ -246,7 +246,7 @@ export const BoardSettingsModal: React.FC<BoardSettingsModalProps> = ({ board, o
 
                      <div className="form-control">
                         <label className="label">
-                            <span className="label-text font-black uppercase tracking-widest text-error/80 text-[10px]">Type "{board.name}" to confirm</span>
+                            <span className="label-text font-black uppercase tracking-widest text-error/80 text-[10px]">Type "<span className="normal-case">{board.name}</span>" to confirm</span>
                         </label>
                         <input 
                             type="text" 
